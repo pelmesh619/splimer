@@ -15,27 +15,27 @@ fn main() {
     match program_input {
         ParseResult::Success(_) => { }
         ParseResult::ThereIsNoInputFilename => {
-            eprintln!("There is no input filename in arguments!");
+            eprintln!("There is no input filename in arguments! \n\nUse `-h` flag to know about my arguments");
             return;
         },
         ParseResult::MemoryValueCannotBeParsed(string) => {
-            eprintln!("Fragment size \"{}\" cannot be parsed as memory value", string);
+            eprintln!("Fragment size \"{}\" cannot be parsed as memory value \n\nUse `-h` flag to know about my arguments", string);
             return;
         },
         ParseResult::FragmentSizeIsToSmall(n) => {
-            eprintln!("Fragment size should be at least {} bytes", n);
+            eprintln!("Fragment size should be at least {} bytes \n\nUse `-h` flag to know about my arguments", n);
             return;
         },
         ParseResult::NumberOfPartsCannotBeParsed(n) => {
-            eprintln!("Number of parts \"{}\" cannot be parsed", n);
+            eprintln!("Number of parts \"{}\" cannot be parsed \n\nUse `-h` flag to know about my arguments", n);
             return;
         },
         ParseResult::NumberOfPartsShouldBeMoreThanOne(_) => {
-            eprintln!("Number of parts should be at least 2");
+            eprintln!("Number of parts should be at least 2 \n\nUse `-h` flag to know about my arguments");
             return;
         },
         ParseResult::ThereIsNoValue(string) => {
-            eprintln!("For argument `{}` value is empty", string);
+            eprintln!("For argument `{}` value is empty \n\nUse `-h` flag to know about my arguments", string);
             return;
         },
         ParseResult::Help => {
