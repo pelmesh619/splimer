@@ -23,6 +23,8 @@ cd splimer
 cargo build --release --target-dir="./"
 ```
 
+If you are struggling with `linker 'cc' not found` error, try [this commands](https://stackoverflow.com/a/66598982) for Linux
+
 Then you will get `splimer` executable file
 
 ## How to use it?
