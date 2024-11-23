@@ -7,7 +7,6 @@ use splimer::Splimer;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    dbg!(&args);
 
     let program_input = ProgramInput::parse(&args);
 
