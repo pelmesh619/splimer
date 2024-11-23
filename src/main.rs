@@ -12,6 +12,7 @@ fn main() {
     let program_input = ProgramInput::parse(&args);
 
     match program_input {
+        ParseResult::Success(_) => { }
         ParseResult::ThereIsNoInputFilename => {
             eprintln!("There is no input filename in arguments!");
             return;
@@ -20,12 +21,16 @@ fn main() {
             eprintln!("This string \"{}\" cannot be parsed as memory value", string);
             return;
         },
-        _ => { }
+        _ => { panic!("Unexpected parse result") }
     }
 
     let ParseResult::Success(program_input) = program_input else { panic!(); };
 
-    let mut splimer = Splimer{program_input};
+    let mut splimer = Splimer::new(program_input);
 
-    splimer.work();
+    if splimer.program_input.to_split {
+        splimer.split();
+    } else {
+        splimer.merge();
+    }
 }
