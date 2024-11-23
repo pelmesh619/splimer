@@ -71,7 +71,7 @@ splimer
 TL;DR Use this to split:
 
 ```
-splimer myfile -S 512g
+splimer myfile -S 0.5g
 ```
 
 and this to merge
