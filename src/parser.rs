@@ -47,6 +47,7 @@ pub struct ProgramInput {
     pub input_filename: String,
     pub fragment_size: usize,
     pub output_directory: String,
+    pub parts: Option<usize>
 }
 
 struct ProgramInputBuilder {
@@ -54,6 +55,7 @@ struct ProgramInputBuilder {
     pub input_filename: Option<String>,
     pub fragment_size: usize,
     pub output_directory: String,
+    pub parts: Option<usize>
 }
 
 impl ProgramInputBuilder {
@@ -62,7 +64,8 @@ impl ProgramInputBuilder {
             to_split: true,
             input_filename: None,
             fragment_size: DEFAULT_FRAGMENT_SIZE,
-            output_directory: DEFAULT_OUTPUT_DIRECTORY.to_string()
+            output_directory: DEFAULT_OUTPUT_DIRECTORY.to_string(),
+            parts: None
         }
     }
 }
@@ -71,6 +74,8 @@ pub enum ParseResult {
     Success(ProgramInput),
     ThereIsNoInputFilename,
     MemoryValueCannotBeParsed(String),
+    NumberOfPartsCannotBeParsed(String),
+    NumberOfPartsShouldBeMoreThanOne(usize),
     FragmentSizeIsToSmall(usize),
     ThereIsNoValue(String),
     SuccessfulHandledArgument,
@@ -108,9 +113,7 @@ impl ProgramInput {
                     String::new()
                 }
             }
-
-            println!("{} {}", key, value);
-
+            
             let result = Self::handle_argument(&key, &value, &mut builder);
             match result {
                 ParseResult::SuccessfulHandledArgument => { if is_next_argument_a_value { i += 1; } },
@@ -131,7 +134,8 @@ impl ProgramInput {
                 to_split: builder.to_split,
                 input_filename: builder.input_filename.unwrap(), 
                 fragment_size: builder.fragment_size,
-                output_directory: builder.output_directory.to_string()
+                output_directory: builder.output_directory.to_string(),
+                parts: builder.parts
             }
         );
     }
@@ -150,6 +154,20 @@ impl ProgramInput {
                     return ParseResult::FragmentSizeIsToSmall(MINIMUM_FRAGMENT_SIZE);
                 };
                 return ParseResult::SuccessfulHandledArgument;
+            },
+            "-n" | "--parts" => {
+                if value.is_empty() {
+                    return ParseResult::ThereIsNoValue(key.clone());
+                }
+                if let Ok(number) = value.parse::<usize>() {
+                    if number <= 1 {
+                        return ParseResult::NumberOfPartsShouldBeMoreThanOne(number);
+                    }
+                    builder.parts = Some(number);
+                    return ParseResult::SuccessfulHandledArgument;
+                } else {
+                    return ParseResult::NumberOfPartsCannotBeParsed(value.clone());
+                }
             },
             "-o" | "--output-directory" => {
                 if value.is_empty() {
