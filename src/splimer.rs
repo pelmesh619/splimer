@@ -2,10 +2,11 @@ use std::cmp::min;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::ProgramInput;
 
-const MAX_BUFFER_SIZE: usize = 1024usize;
+const MAX_BUFFER_SIZE: usize = 1024 * 1024usize;
 
 pub struct Splimer {
     pub program_input: ProgramInput,
@@ -38,20 +39,23 @@ impl Splimer {
             return;
         }
 
+        if let Some(parts) = self.program_input.parts {
+            self.program_input.fragment_size = (file_size + parts - 1) / parts;
+        }
+        
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
 
         let mut buffer = vec![0; min(MAX_BUFFER_SIZE, self.program_input.fragment_size)];
 
         let mut fragment_number = 1;
         let mut bytes_written = 0;
+        let mut total_bytes_written = 0;
 
-        let result = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(Self::make_output_filename(fragment_number, &self.program_input.input_filename));
-        
-        println!("Содержимое файла {}", Self::make_output_filename(fragment_number, &self.program_input.input_filename));
-        self.current_file_to_write = Some(Self::check_file_access(result));
-
+        self.open_file_for_write(&Self::make_output_filename(fragment_number, &self.program_input.input_filename));
+                
         while let Ok(size) = file.read(&mut buffer) {
             if size == 0 {
                 break;
@@ -62,17 +66,19 @@ impl Splimer {
 
             bytes_written += how_many;
             if bytes_written == self.program_input.fragment_size {
-                self.current_file_to_write.as_ref().unwrap().flush();
-                fragment_number += 1;
-                self.current_file_to_write = Some(
-                    Self::check_file_access(
-                        OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .create(true)
-                            .open(Self::make_output_filename(fragment_number, &self.program_input.input_filename))
-                    )
+                self.flush();
+                total_bytes_written += bytes_written;
+                println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
+                    Self::make_output_filename(fragment_number, &self.program_input.input_filename),
+                    total_bytes_written / 1024,
+                    file_size / 1024,
+                    fill = (file_size / 1024).to_string().len()
                 );
+                if file_size == bytes_written * fragment_number as usize {
+                    return;
+                }
+                fragment_number += 1;
+                self.open_file_for_write(&Self::make_output_filename(fragment_number, &self.program_input.input_filename));
                 bytes_written = size - how_many;
 
                 if how_many == size {
@@ -81,10 +87,23 @@ impl Splimer {
                 self.write_bytes(buffer[how_many..].as_ref());
             }
         }
+        self.flush();
+        total_bytes_written += bytes_written;
+        println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
+            Self::make_output_filename(fragment_number, &self.program_input.input_filename),
+            total_bytes_written / 1024,
+            file_size / 1024,
+            fill = (file_size / 1024).to_string().len()
+        );
+
+        println!(
+            "The job is done! Total passed {:?} s", 
+            (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
+        );
 
     }
 
-    pub fn merge (&mut self) {
+    pub fn merge(&mut self) {
         self.current_file_to_write = Some(
             Self::check_file_access(
                 OpenOptions::new()
@@ -117,6 +136,7 @@ impl Splimer {
                 bytes_written += size;
             }
 
+            self.flush();
             println!("File {} is read, total kilobytes written - {}", 
                 Self::make_output_filename(fragment_number, &self.program_input.input_filename),
                 bytes_written / 1024
@@ -134,6 +154,24 @@ impl Splimer {
         }
     }
 
+    fn open_file_for_write(&mut self, filename: &String) {
+        self.current_file_to_write = Some(
+            Self::check_file_access(
+                OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(filename)
+            )
+        );
+    }
+
+    fn flush(&mut self) {
+        if let Some(f) = &mut self.current_file_to_write {
+            Self::check_file_access(f.flush());
+        }
+    }
+
     fn make_output_filename(fragment_number: i32, pattern: &String) -> String {
         (
             if let Some(ind) = pattern.rfind('.') {
@@ -141,7 +179,7 @@ impl Splimer {
             } else {
                 pattern.clone()
             }
-        ) + &fragment_number.to_string().to_owned() + ".splm"
+        ) + "_[" + &fragment_number.to_string().to_owned() + "].splm"
     }
 
     fn make_filename_with_suffix(suffix: &String, pattern: &String) -> String {
