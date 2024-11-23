@@ -3,7 +3,9 @@ const MINIMUM_FRAGMENT_SIZE: usize = 1024;
 
 pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
     let mut value = 0usize;
-    let mut exp = -1;
+    let mut exp10 = -1;
+    let mut exp2 = -1;
+
 
     for i in string.chars().into_iter() {
         match i {
@@ -11,20 +13,28 @@ pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
                 value *= 10;
                 value += i.to_digit(10u32).unwrap_or(0u32) as usize;
 
-                if exp != -1 { exp += 1; }
+                if exp10 != -1 { exp10 += 1; }
+                if exp2 != -1 {
+                    return Err(());
+                }
             },
-            '.' => {
-                if exp == -1 {
-                    exp = 0;
+            '.' | ',' => {
+                if exp10 == -1 {
+                    exp10 = 0;
                 } else {
+                    return Err(());
+                }
+                if exp2 != -1 {
                     return Err(());
                 }
             },
             'g' | 'G' | 'm' | 'M' | 'k' | 'K' | 'b' | 'B' => {
-                if exp == -1 {
-                    exp = 0;
+                if exp2 == -1 {
+                    exp2 = 0;
+                } else {
+                    return Err(());
                 }
-                exp += match i {
+                exp2 += match i {
                     'g' | 'G' => 30,
                     'm' | 'M' => 20,
                     'k' | 'K' => 10,
@@ -36,9 +46,11 @@ pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
         }
     }
 
-    value *= 2usize.pow(if exp >= 0 { exp as u32 } else { 0 });
+    value *= 2usize.pow(if exp2 >= 0 { exp2 as u32 } else { 0 });
 
-    return Ok(value);
+    let value = value as f64 / 10f64.powf(if exp10 >= 0 { exp10 as f64 } else { 0.0 });
+
+    return Ok(value as usize);
 }
 
 pub struct ProgramInput {
