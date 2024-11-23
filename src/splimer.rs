@@ -33,9 +33,9 @@ impl Splimer {
         let file_size = metadata.len() as usize;
         
         if file_size < self.program_input.fragment_size {
-            println!("File {} is already less than {}, no work is done!", 
+            println!("File {} is already less than {} kB, no work is done!", 
                 self.program_input.input_filename, 
-                self.program_input.fragment_size
+                self.program_input.fragment_size / 1024
             );
             return;
         }
