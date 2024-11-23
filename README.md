@@ -25,7 +25,7 @@ cargo build --release --target-dir="./"
 
 If you are struggling with `linker 'cc' not found` error, try [this commands](https://stackoverflow.com/a/66598982) for Linux
 
-Then you will get `splimer` executable file
+Then you will get `splimer` executable file in `./splimer/release/` directory
 
 Or if you are lazy WINDOWS user, you can just download it from "Releases" tab
 
