@@ -1,3 +1,7 @@
+const DEFAULT_FRAGMENT_SIZE: usize = 1024 * 1024 * 1024usize;
+const MINIMUM_FRAGMENT_SIZE: usize = 1024;
+const DEFAULT_OUTPUT_DIRECTORY: &str = "splimer-output";
+
 pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
     let mut value = 0usize;
     let mut exp = -1;
@@ -39,14 +43,38 @@ pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
 }
 
 pub struct ProgramInput {
+    pub to_split: bool,
     pub input_filename: String,
     pub fragment_size: usize,
+    pub output_directory: String,
+}
+
+struct ProgramInputBuilder {
+    pub to_split: bool,
+    pub input_filename: Option<String>,
+    pub fragment_size: usize,
+    pub output_directory: String,
+}
+
+impl ProgramInputBuilder {
+    fn new() -> ProgramInputBuilder {
+        return Self{
+            to_split: true,
+            input_filename: None,
+            fragment_size: DEFAULT_FRAGMENT_SIZE,
+            output_directory: DEFAULT_OUTPUT_DIRECTORY.to_string()
+        }
+    }
 }
 
 pub enum ParseResult {
     Success(ProgramInput),
     ThereIsNoInputFilename,
-    MemoryValueCannotBeParsed(String)
+    MemoryValueCannotBeParsed(String),
+    FragmentSizeIsToSmall(usize),
+    ThereIsNoValue(String),
+    SuccessfulHandledArgument,
+    SuccessfulHandledFlag,
 }
 
 impl ProgramInput {
@@ -57,30 +85,88 @@ impl ProgramInput {
             return ParseResult::ThereIsNoInputFilename;
         }
 
-        let mut input_filename: Option<String> = None;
-        let mut fragment_size = 4 * 1024 * 1024 * 1024usize;
+        let mut builder = ProgramInputBuilder::new();
 
-        let mut i = 1usize;
+        let mut i = 0usize;
         while i < arguments.len() {
             let string = &arguments[i];
 
-            match string.as_str() {
-                "-s" | "--size" => {
-                    i += 1;
-                    fragment_size = match parse_memory_value(string) {
-                        Ok(v) => v,
-                        Err(_) => return ParseResult::MemoryValueCannotBeParsed(string.clone()),
-                    }
-                },
-                _ => {
-                    if input_filename == None {
-                        input_filename = Option::Some(arguments[i].clone());
-                    }
+            let key;
+            let value;
+            let is_next_argument_a_value;
+            if let Some(equal_sign_index) = string.find('=') {
+                value = string[equal_sign_index + 1..].to_string();
+                key = string[..equal_sign_index].to_string();
+                is_next_argument_a_value = false;
+            } else {
+                key = string.clone();
+                value = if i + 1 < arguments.len() {
+                    is_next_argument_a_value = true;
+                    arguments[i].clone()
+                } else {
+                    is_next_argument_a_value = false;
+                    String::new()
                 }
-            };
-            i += 1;
+            }
+
+            let result = Self::handle_argument(&key, &value, &mut builder);
+            match result {
+                ParseResult::SuccessfulHandledArgument | ParseResult::SuccessfulHandledFlag => { },
+                ParseResult::Success(_) => panic!(),
+                _ => return result
+            }
+            
+            i += 1 + is_next_argument_a_value as usize;
         }
 
-        return ParseResult::Success(ProgramInput{input_filename: arguments[1].clone(), fragment_size});
+        if builder.input_filename == None {
+            return ParseResult::ThereIsNoInputFilename;
+        }
+
+        return ParseResult::Success(
+            ProgramInput{
+                to_split: builder.to_split,
+                input_filename: builder.input_filename.unwrap(), 
+                fragment_size: builder.fragment_size,
+                output_directory: builder.output_directory.to_string()
+            }
+        );
+    }
+
+    fn handle_argument(key: &String, value: &String, builder: &mut ProgramInputBuilder) -> ParseResult {
+        match key.as_str() {
+            "-s" | "--fragment-size" => {
+                if value.is_empty() {
+                    return ParseResult::ThereIsNoValue(key.clone());
+                }
+                builder.fragment_size = match parse_memory_value(&value) {
+                    Ok(v) => v,
+                    Err(_) => return ParseResult::MemoryValueCannotBeParsed(value.clone()),
+                };
+                if builder.fragment_size < MINIMUM_FRAGMENT_SIZE {
+                    return ParseResult::FragmentSizeIsToSmall(MINIMUM_FRAGMENT_SIZE);
+                };
+                return ParseResult::SuccessfulHandledArgument;
+            },
+            "-o" | "--output-directory" => {
+                if value.is_empty() {
+                    return ParseResult::ThereIsNoValue(key.clone());
+                }
+                builder.output_directory = value.clone();
+                return ParseResult::SuccessfulHandledArgument;
+            },
+            "-m" | "--merge" => {
+                builder.to_split = false;
+                return ParseResult::SuccessfulHandledFlag;
+            },
+            "-S" | "--split" => {
+                builder.to_split = true;
+                return ParseResult::SuccessfulHandledFlag;
+            }
+            _ => {
+                println!("Warning: unknown argument - {}", key);
+                return ParseResult::SuccessfulHandledFlag;
+            }
+        };
     }
 }
