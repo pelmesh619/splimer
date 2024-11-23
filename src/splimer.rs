@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::ProgramInput;
@@ -54,7 +55,7 @@ impl Splimer {
         let mut bytes_written = 0;
         let mut total_bytes_written = 0;
 
-        self.open_file_for_write(&Self::make_output_filename(fragment_number, &self.program_input.input_filename));
+        self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
                 
         while let Ok(size) = file.read(&mut buffer) {
             if size == 0 {
@@ -69,7 +70,7 @@ impl Splimer {
                 self.flush();
                 total_bytes_written += bytes_written;
                 println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-                    Self::make_output_filename(fragment_number, &self.program_input.input_filename),
+                    self.make_output_filename(fragment_number, &self.program_input.input_filename),
                     total_bytes_written / 1024,
                     file_size / 1024,
                     fill = (file_size / 1024).to_string().len()
@@ -78,7 +79,7 @@ impl Splimer {
                     return;
                 }
                 fragment_number += 1;
-                self.open_file_for_write(&Self::make_output_filename(fragment_number, &self.program_input.input_filename));
+                self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
                 bytes_written = size - how_many;
 
                 if how_many == size {
@@ -90,7 +91,7 @@ impl Splimer {
         self.flush();
         total_bytes_written += bytes_written;
         println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-            Self::make_output_filename(fragment_number, &self.program_input.input_filename),
+            self.make_output_filename(fragment_number, &self.program_input.input_filename),
             total_bytes_written / 1024,
             file_size / 1024,
             fill = (file_size / 1024).to_string().len()
@@ -114,16 +115,21 @@ impl Splimer {
             )
         );
 
-        let mut buffer = vec![0; self.program_input.fragment_size];
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        let mut buffer = vec![0; MAX_BUFFER_SIZE];
 
         let mut fragment_number = 1;
         let mut bytes_written = 0usize;
 
-        while let Ok(_) = fs::metadata(Self::make_output_filename(fragment_number, &self.program_input.input_filename)) {
+        while let Ok(_) = fs::metadata(self.make_output_filename(fragment_number, &self.program_input.input_filename)) {
             let mut file = Self::check_file_access(
                 OpenOptions::new()
                     .read(true)
-                    .open(Self::make_output_filename(fragment_number, &self.program_input.input_filename)
+                    .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
                 )
             );
 
@@ -138,13 +144,20 @@ impl Splimer {
 
             self.flush();
             println!("File {} is read, total kilobytes written - {}", 
-                Self::make_output_filename(fragment_number, &self.program_input.input_filename),
+                self.make_output_filename(fragment_number, &self.program_input.input_filename),
                 bytes_written / 1024
             );
 
             fragment_number += 1;
 
+
         }
+        println!("File {} was merged", &self.program_input.input_filename);
+
+        println!(
+            "The job is done! Total passed {:?} s", 
+            (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
+        );
 
     }
 
@@ -172,22 +185,28 @@ impl Splimer {
         }
     }
 
-    fn make_output_filename(fragment_number: i32, pattern: &String) -> String {
-        (
-            if let Some(ind) = pattern.rfind('.') {
-                pattern[..ind].to_string()
-            } else {
-                pattern.clone()
-            }
-        ) + "_[" + &fragment_number.to_string().to_owned() + "].splm"
+    fn make_output_filename(&self, fragment_number: i32, pattern: &String) -> String {
+        let filename = Path::new(pattern).file_stem().unwrap().to_str().unwrap();
+
+        let filename = filename.to_string() + 
+            "_[" + &fragment_number.to_string().to_owned() + "].splm";
+
+        if let Some(dir) = &self.program_input.output_directory {
+            Path::new(&dir)
+                .join(filename)
+                .to_str().unwrap().to_string()
+        } else {
+            return Path::new(pattern).parent().unwrap()
+                .join(Path::new(&filename))
+                .to_str().unwrap().to_string()
+        }        
     }
 
-    fn make_filename_with_suffix(suffix: &String, pattern: &String) -> String {
-        if let Some(ind) = pattern.rfind('.') {
-            pattern[..ind].to_string() + suffix + &pattern[ind..].to_string()
-        } else {
-            pattern.clone() + suffix
-        }
+    fn make_filename_with_suffix(suffix: &String, pattern: &String) -> String {        
+        return Path::new(pattern).file_stem().unwrap().to_str().unwrap().to_string() + 
+            suffix + 
+            "." + 
+            Path::new(pattern).extension().unwrap().to_str().unwrap();
     }
 
     fn check_file_access<T, Error: std::fmt::Debug>(result: Result<T, Error>) -> T {
