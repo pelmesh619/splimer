@@ -26,9 +26,9 @@ pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
                     exp = 0;
                 }
                 exp += match i {
-                    'g' | 'G' => 9,
-                    'm' | 'M' => 6,
-                    'k' | 'K' => 3,
+                    'g' | 'G' => 30,
+                    'm' | 'M' => 20,
+                    'k' | 'K' => 10,
                     'b' | 'B' => 0,
                     _ => panic!()
                 };
@@ -37,7 +37,7 @@ pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
         }
     }
 
-    value *= 10usize.pow(if exp >= 0 { exp as u32 } else { 0 });
+    value *= 2usize.pow(if exp >= 0 { exp as u32 } else { 0 });
 
     return Ok(value);
 }
@@ -87,7 +87,7 @@ impl ProgramInput {
 
         let mut builder = ProgramInputBuilder::new();
 
-        let mut i = 0usize;
+        let mut i = 1usize;
         while i < arguments.len() {
             let string = &arguments[i];
 
@@ -102,21 +102,24 @@ impl ProgramInput {
                 key = string.clone();
                 value = if i + 1 < arguments.len() {
                     is_next_argument_a_value = true;
-                    arguments[i].clone()
+                    arguments[i + 1].clone()
                 } else {
                     is_next_argument_a_value = false;
                     String::new()
                 }
             }
 
+            println!("{} {}", key, value);
+
             let result = Self::handle_argument(&key, &value, &mut builder);
             match result {
-                ParseResult::SuccessfulHandledArgument | ParseResult::SuccessfulHandledFlag => { },
+                ParseResult::SuccessfulHandledArgument => { if is_next_argument_a_value { i += 1; } },
+                ParseResult::SuccessfulHandledFlag => { },
                 ParseResult::Success(_) => panic!(),
                 _ => return result
             }
             
-            i += 1 + is_next_argument_a_value as usize;
+            i += 1;
         }
 
         if builder.input_filename == None {
@@ -135,7 +138,7 @@ impl ProgramInput {
 
     fn handle_argument(key: &String, value: &String, builder: &mut ProgramInputBuilder) -> ParseResult {
         match key.as_str() {
-            "-s" | "--fragment-size" => {
+            "-S" | "--fragment-size" => {
                 if value.is_empty() {
                     return ParseResult::ThereIsNoValue(key.clone());
                 }
@@ -159,11 +162,15 @@ impl ProgramInput {
                 builder.to_split = false;
                 return ParseResult::SuccessfulHandledFlag;
             },
-            "-S" | "--split" => {
+            "-s" | "--split" => {
                 builder.to_split = true;
                 return ParseResult::SuccessfulHandledFlag;
             }
             _ => {
+                if builder.input_filename == None {
+                    builder.input_filename = Some(key.clone());
+                    return ParseResult::SuccessfulHandledFlag;
+                }
                 println!("Warning: unknown argument - {}", key);
                 return ParseResult::SuccessfulHandledFlag;
             }
