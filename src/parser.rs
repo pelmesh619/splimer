@@ -1,6 +1,5 @@
 const DEFAULT_FRAGMENT_SIZE: usize = 1024 * 1024 * 1024usize;
 const MINIMUM_FRAGMENT_SIZE: usize = 1024;
-const DEFAULT_OUTPUT_DIRECTORY: &str = "splimer-output";
 
 pub fn parse_memory_value(string: &String) -> Result<usize, ()> {
     let mut value = 0usize;
@@ -46,7 +45,7 @@ pub struct ProgramInput {
     pub to_split: bool,
     pub input_filename: String,
     pub fragment_size: usize,
-    pub output_directory: String,
+    pub output_directory: Option<String>,
     pub parts: Option<usize>
 }
 
@@ -54,7 +53,7 @@ struct ProgramInputBuilder {
     pub to_split: bool,
     pub input_filename: Option<String>,
     pub fragment_size: usize,
-    pub output_directory: String,
+    pub output_directory: Option<String>,
     pub parts: Option<usize>
 }
 
@@ -64,7 +63,7 @@ impl ProgramInputBuilder {
             to_split: true,
             input_filename: None,
             fragment_size: DEFAULT_FRAGMENT_SIZE,
-            output_directory: DEFAULT_OUTPUT_DIRECTORY.to_string(),
+            output_directory: None,
             parts: None
         }
     }
@@ -80,6 +79,7 @@ pub enum ParseResult {
     ThereIsNoValue(String),
     SuccessfulHandledArgument,
     SuccessfulHandledFlag,
+    Help
 }
 
 impl ProgramInput {
@@ -113,7 +113,7 @@ impl ProgramInput {
                     String::new()
                 }
             }
-            
+
             let result = Self::handle_argument(&key, &value, &mut builder);
             match result {
                 ParseResult::SuccessfulHandledArgument => { if is_next_argument_a_value { i += 1; } },
@@ -134,7 +134,7 @@ impl ProgramInput {
                 to_split: builder.to_split,
                 input_filename: builder.input_filename.unwrap(), 
                 fragment_size: builder.fragment_size,
-                output_directory: builder.output_directory.to_string(),
+                output_directory: builder.output_directory.clone(),
                 parts: builder.parts
             }
         );
@@ -173,7 +173,7 @@ impl ProgramInput {
                 if value.is_empty() {
                     return ParseResult::ThereIsNoValue(key.clone());
                 }
-                builder.output_directory = value.clone();
+                builder.output_directory = Some(value.clone());
                 return ParseResult::SuccessfulHandledArgument;
             },
             "-m" | "--merge" => {
@@ -183,7 +183,10 @@ impl ProgramInput {
             "-s" | "--split" => {
                 builder.to_split = true;
                 return ParseResult::SuccessfulHandledFlag;
-            }
+            },
+            "-h" | "--help" => {
+                return ParseResult::Help;
+            },
             _ => {
                 if builder.input_filename == None {
                     builder.input_filename = Some(key.clone());
