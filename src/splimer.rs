@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::ProgramInput;
 
-const MAX_BUFFER_SIZE: usize = 1024 * 1024usize;
+const MAX_BUFFER_SIZE: usize = 1024 * 1024usize; // in bytes
 
 pub struct Splimer {
     pub program_input: ProgramInput,
