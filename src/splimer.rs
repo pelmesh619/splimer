@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -67,12 +67,18 @@ impl Splimer {
 
         let mut buffer = vec![0; min(MAX_BUFFER_SIZE, self.program_input.fragment_size)];
 
-        let mut fragment_number = 1;
+        let mut fragment_number = self.program_input.part_number.unwrap_or(1);
         let mut bytes_written = 0;
         let mut total_bytes_written = 0;
 
         self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
-                
+
+        if self.program_input.part_number.is_some() {
+            Self::check_file_access(
+                file.seek(SeekFrom::Start(((fragment_number - 1) * self.program_input.fragment_size) as u64))
+            );
+        }
+
         while let Ok(size) = file.read(&mut buffer) {
             if size == 0 {
                 break;
@@ -91,10 +97,12 @@ impl Splimer {
                     file_size / 1024,
                     fill = (file_size / 1024).to_string().len()
                 );
-                if file_size == bytes_written * fragment_number as usize {
+                if file_size == bytes_written * fragment_number as usize ||
+                self.program_input.part_number.is_some() {
                     return;
                 }
                 fragment_number += 1;
+
                 self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
                 bytes_written = size - how_many;
 
@@ -201,7 +209,7 @@ impl Splimer {
         }
     }
 
-    fn make_output_filename(&self, fragment_number: i32, pattern: &String) -> String {
+    fn make_output_filename(&self, fragment_number: usize, pattern: &String) -> String {
         let filename = Path::new(pattern).file_stem().unwrap().to_str().unwrap();
 
         let filename = filename.to_string() + 
