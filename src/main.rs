@@ -34,6 +34,10 @@ fn main() {
             eprintln!("Number of parts should be at least 2 \n\nUse `-h` flag to know about my arguments");
             return;
         },
+        ParseResult::PartNumberShouldBePositive(_) => {
+            eprintln!("Part number should be a positive integer \n\nUse `-h` flag to know about my arguments");
+            return;
+        },
         ParseResult::ThereIsNoValue(string) => {
             eprintln!("For argument `{}` value is empty \n\nUse `-h` flag to know about my arguments", string);
             return;
