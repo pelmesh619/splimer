@@ -39,6 +39,22 @@ impl Splimer {
             );
             return;
         }
+        let part_number = self.program_input.part_number;
+        if part_number.is_some() && 
+            ((file_size as f32) / self.program_input.fragment_size as f32).ceil() < part_number.unwrap() as f32 {
+            println!("Error: Cannot generate {}{} part because there will be {} part{} in total", 
+                part_number.unwrap(),
+                match part_number.unwrap() {
+                    1 => "st",
+                    2 => "nd",
+                    3 => "rd",
+                    _ => "th"
+                },
+                ((file_size as f32) / self.program_input.fragment_size as f32).ceil() as usize,
+                if ((file_size as f32) / self.program_input.fragment_size as f32).ceil() == 1f32 { "" } else { "s" }
+            );
+            return;
+        }
 
         if let Some(parts) = self.program_input.parts {
             self.program_input.fragment_size = (file_size + parts - 1) / parts;
