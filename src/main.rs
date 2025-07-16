@@ -55,7 +55,7 @@ splimer
     -n (number)
     --parts=(number)                Number of output parts; should be more than 1.
                                     Makes all output files equal size.
-                                    If entered `--fragment-size` will be ignored
+                                    If `--fragment-size` is provided, `--parts` will be ignored
 
     -s
     --split                         Splits file `input_filename`
@@ -71,7 +71,7 @@ splimer
 
     -o (output_directory)
     --output-directory=(output_directory)   Output directory
-                                            (by default it is directory, where input file lies)
+                                            (by default it is a directory, where input file lies)
 
     -h 
     --help                                  Show help message"
