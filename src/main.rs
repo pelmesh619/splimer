@@ -57,6 +57,12 @@ splimer
                                     Makes all output files equal size.
                                     If `--fragment-size` is provided, `--parts` will be ignored
 
+    -N (number)
+    --part-number=(number)          Sequential number of part to make. 
+                                    It allows to make e.g. 4th part
+                                    skipping previous 3, which takes less storage
+                                    than making all at once
+
     -s
     --split                         Splits file `input_filename`
                                     If file has `filename.ext` pattern there will be created
