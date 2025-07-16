@@ -90,6 +90,7 @@ pub enum ParseResult {
     MemoryValueCannotBeParsed(String),
     NumberOfPartsCannotBeParsed(String),
     NumberOfPartsShouldBeMoreThanOne(usize),
+    PartNumberShouldBePositive(usize),
     FragmentSizeIsToSmall(usize),
     ThereIsNoValue(String),
     SuccessfulHandledArgument,
@@ -190,8 +191,8 @@ impl ProgramInput {
                     return ParseResult::ThereIsNoValue(key.clone());
                 }
                 if let Ok(number) = value.parse::<usize>() {
-                    if number <= 1 {
-                        return ParseResult::NumberOfPartsShouldBeMoreThanOne(number);
+                    if number < 1 {
+                        return ParseResult::PartNumberShouldBePositive(number);
                     }
                     builder.part_number = Some(number);
                     return ParseResult::SuccessfulHandledArgument;
