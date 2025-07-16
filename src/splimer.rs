@@ -32,6 +32,10 @@ impl Splimer {
 
         let file_size = metadata.len() as usize;
         
+        if let Some(parts) = self.program_input.parts {
+            self.program_input.fragment_size = (file_size + parts - 1) / parts;
+        }
+
         if file_size < self.program_input.fragment_size {
             println!("File {} is already less than {} kB, no work is done!", 
                 self.program_input.input_filename, 
@@ -54,10 +58,6 @@ impl Splimer {
                 if ((file_size as f32) / self.program_input.fragment_size as f32).ceil() == 1f32 { "" } else { "s" }
             );
             return;
-        }
-
-        if let Some(parts) = self.program_input.parts {
-            self.program_input.fragment_size = (file_size + parts - 1) / parts;
         }
         
         let start = SystemTime::now()
