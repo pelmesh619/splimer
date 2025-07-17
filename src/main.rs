@@ -30,12 +30,12 @@ fn main() {
             eprintln!("Number of parts \"{}\" cannot be parsed \n\nUse `-h` flag to know about my arguments", n);
             return;
         },
-        ParseResult::NumberOfPartsShouldBeMoreThanOne(_) => {
-            eprintln!("Number of parts should be at least 2 \n\nUse `-h` flag to know about my arguments");
+        ParseResult::NumberOfPartsShouldBeMoreThanOne(n) => {
+            eprintln!("Number of parts should be at least 2, not {}\n\nUse `-h` flag to know about my arguments", n);
             return;
         },
-        ParseResult::PartNumberShouldBePositive(_) => {
-            eprintln!("Part number should be a positive integer \n\nUse `-h` flag to know about my arguments");
+        ParseResult::PartNumberShouldBePositive(n) => {
+            eprintln!("Part number should be a positive integer, not {}\n\nUse `-h` flag to know about my arguments", n);
             return;
         },
         ParseResult::ThereIsNoValue(string) => {
