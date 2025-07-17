@@ -46,7 +46,13 @@ splimer
     -n (number)
     --parts=(number)                Number of output parts; should be more than 1.
                                     Makes all output files equal size.
-                                    If entered `--fragment-size` will be ignored
+                                    If `--fragment-size` is provided, `--parts` will be ignored
+
+    -N (number)
+    --part-number=(number)          Sequential number of part to make. 
+                                    It allows to make e.g. 4th part
+                                    skipping previous 3, which takes less storage
+                                    than making all at once
 
     -s
     --split                         Splits file `input_filename`
@@ -62,7 +68,7 @@ splimer
 
     -o (output_directory)
     --output-directory=(output_directory)   Output directory
-                                            (by default it is directory, where input file lies)
+                                            (by default it is a directory, where input file lies)
 
     -h 
     --help                                  Show help message
