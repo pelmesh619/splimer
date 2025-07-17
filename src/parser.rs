@@ -58,7 +58,8 @@ pub struct ProgramInput {
     pub input_filename: String,
     pub fragment_size: usize,
     pub output_directory: Option<String>,
-    pub parts: Option<usize>
+    pub parts: Option<usize>,
+    pub part_number: Option<usize>
 }
 
 struct ProgramInputBuilder {
@@ -66,7 +67,8 @@ struct ProgramInputBuilder {
     pub input_filename: Option<String>,
     pub fragment_size: usize,
     pub output_directory: Option<String>,
-    pub parts: Option<usize>
+    pub parts: Option<usize>,
+    pub part_number: Option<usize>
 }
 
 impl ProgramInputBuilder {
@@ -76,7 +78,8 @@ impl ProgramInputBuilder {
             input_filename: None,
             fragment_size: DEFAULT_FRAGMENT_SIZE,
             output_directory: None,
-            parts: None
+            parts: None,
+            part_number: None
         }
     }
 }
@@ -87,6 +90,7 @@ pub enum ParseResult {
     MemoryValueCannotBeParsed(String),
     NumberOfPartsCannotBeParsed(String),
     NumberOfPartsShouldBeMoreThanOne(usize),
+    PartNumberShouldBePositive(usize),
     FragmentSizeIsToSmall(usize),
     ThereIsNoValue(String),
     SuccessfulHandledArgument,
@@ -147,7 +151,8 @@ impl ProgramInput {
                 input_filename: builder.input_filename.unwrap(), 
                 fragment_size: builder.fragment_size,
                 output_directory: builder.output_directory.clone(),
-                parts: builder.parts
+                parts: builder.parts,
+                part_number: builder.part_number
             }
         );
     }
@@ -176,6 +181,20 @@ impl ProgramInput {
                         return ParseResult::NumberOfPartsShouldBeMoreThanOne(number);
                     }
                     builder.parts = Some(number);
+                    return ParseResult::SuccessfulHandledArgument;
+                } else {
+                    return ParseResult::NumberOfPartsCannotBeParsed(value.clone());
+                }
+            },
+            "-N" | "--part-number" => {
+                if value.is_empty() {
+                    return ParseResult::ThereIsNoValue(key.clone());
+                }
+                if let Ok(number) = value.parse::<usize>() {
+                    if number < 1 {
+                        return ParseResult::PartNumberShouldBePositive(number);
+                    }
+                    builder.part_number = Some(number);
                     return ParseResult::SuccessfulHandledArgument;
                 } else {
                     return ParseResult::NumberOfPartsCannotBeParsed(value.clone());

@@ -1,13 +1,13 @@
 use std::cmp::min;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::ProgramInput;
 
-const MAX_BUFFER_SIZE: usize = 1024 * 1024usize;
+const MAX_BUFFER_SIZE: usize = 1024 * 1024usize; // in bytes
 
 pub struct Splimer {
     pub program_input: ProgramInput,
@@ -32,6 +32,10 @@ impl Splimer {
 
         let file_size = metadata.len() as usize;
         
+        if let Some(parts) = self.program_input.parts {
+            self.program_input.fragment_size = (file_size + parts - 1) / parts;
+        }
+
         if file_size < self.program_input.fragment_size {
             println!("File {} is already less than {} kB, no work is done!", 
                 self.program_input.input_filename, 
@@ -39,9 +43,21 @@ impl Splimer {
             );
             return;
         }
-
-        if let Some(parts) = self.program_input.parts {
-            self.program_input.fragment_size = (file_size + parts - 1) / parts;
+        let part_number = self.program_input.part_number;
+        if part_number.is_some() && 
+            ((file_size as f32) / self.program_input.fragment_size as f32).ceil() < part_number.unwrap() as f32 {
+            println!("Error: Cannot generate {}{} part because there will be {} part{} in total", 
+                part_number.unwrap(),
+                match part_number.unwrap() {
+                    1 => "st",
+                    2 => "nd",
+                    3 => "rd",
+                    _ => "th"
+                },
+                ((file_size as f32) / self.program_input.fragment_size as f32).ceil() as usize,
+                if ((file_size as f32) / self.program_input.fragment_size as f32).ceil() == 1f32 { "" } else { "s" }
+            );
+            return;
         }
         
         let start = SystemTime::now()
@@ -51,12 +67,18 @@ impl Splimer {
 
         let mut buffer = vec![0; min(MAX_BUFFER_SIZE, self.program_input.fragment_size)];
 
-        let mut fragment_number = 1;
+        let mut fragment_number = self.program_input.part_number.unwrap_or(1);
         let mut bytes_written = 0;
         let mut total_bytes_written = 0;
 
         self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
-                
+
+        if self.program_input.part_number.is_some() {
+            Self::check_file_access(
+                file.seek(SeekFrom::Start(((fragment_number - 1) * self.program_input.fragment_size) as u64))
+            );
+        }
+
         while let Ok(size) = file.read(&mut buffer) {
             if size == 0 {
                 break;
@@ -67,6 +89,10 @@ impl Splimer {
 
             bytes_written += how_many;
             if bytes_written == self.program_input.fragment_size {
+                if file_size == bytes_written * fragment_number as usize ||
+                self.program_input.part_number.is_some() {
+                    break;
+                }
                 self.flush();
                 total_bytes_written += bytes_written;
                 println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
@@ -75,10 +101,8 @@ impl Splimer {
                     file_size / 1024,
                     fill = (file_size / 1024).to_string().len()
                 );
-                if file_size == bytes_written * fragment_number as usize {
-                    return;
-                }
                 fragment_number += 1;
+
                 self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
                 bytes_written = size - how_many;
 
@@ -185,7 +209,7 @@ impl Splimer {
         }
     }
 
-    fn make_output_filename(&self, fragment_number: i32, pattern: &String) -> String {
+    fn make_output_filename(&self, fragment_number: usize, pattern: &String) -> String {
         let filename = Path::new(pattern).file_stem().unwrap().to_str().unwrap();
 
         let filename = filename.to_string() + 
