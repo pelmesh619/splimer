@@ -89,6 +89,10 @@ impl Splimer {
 
             bytes_written += how_many;
             if bytes_written == self.program_input.fragment_size {
+                if file_size == bytes_written * fragment_number as usize ||
+                self.program_input.part_number.is_some() {
+                    break;
+                }
                 self.flush();
                 total_bytes_written += bytes_written;
                 println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
@@ -97,10 +101,6 @@ impl Splimer {
                     file_size / 1024,
                     fill = (file_size / 1024).to_string().len()
                 );
-                if file_size == bytes_written * fragment_number as usize ||
-                self.program_input.part_number.is_some() {
-                    return;
-                }
                 fragment_number += 1;
 
                 self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
