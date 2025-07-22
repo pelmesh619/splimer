@@ -96,5 +96,5 @@ splimer myfile --merge
 
 * If you what to rename your output files after a program's work, do it with all of them, otherwise, they will be ignored while merging
 
-(i am just lazy to think about all those ploblems)
+(i am just lazy to think about all those problems)
 
