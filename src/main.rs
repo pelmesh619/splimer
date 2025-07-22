@@ -7,7 +7,13 @@ use parser::{ParseResult, ProgramInput};
 mod splimer;
 use splimer::Splimer;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() {
+    println!("Splimer {}", VERSION);
+    println!("Application for splitting and merging files");
+    println!("https://github.com/pelmesh619/splimer");
+
     let args: Vec<String> = env::args().collect();
 
     let program_input = ProgramInput::parse(&args);
