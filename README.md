@@ -98,3 +98,7 @@ splimer myfile --merge
 
 (i am just lazy to think about all those problems)
 
+## TODO
+
+* Directory content splitting
+* Possibly real archiving (like with compression and/or error-resistance)
