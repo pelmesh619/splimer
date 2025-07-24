@@ -20,13 +20,15 @@ struct FileRecord {
 pub struct Splimer {
     pub program_input: ProgramInput,
     current_file_to_write: Option<File>,
+    records: Vec<FileRecord>
 }
 
 impl Splimer {
     pub fn new(program_input: ProgramInput) -> Splimer {
         return Splimer{
             program_input, 
-            current_file_to_write: None
+            current_file_to_write: None,
+            records: Vec::new()
         };
     }
 
