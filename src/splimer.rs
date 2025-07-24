@@ -9,6 +9,14 @@ use crate::parser::ProgramInput;
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024usize; // in bytes
 
+#[derive(Debug, Serialize, Deserialize)]
+struct FileRecord {
+    path: String,
+    size: usize,
+    offset: usize,
+    fragment_index: usize,
+}
+
 pub struct Splimer {
     pub program_input: ProgramInput,
     current_file_to_write: Option<File>,
