@@ -47,7 +47,8 @@ impl Splimer {
         }
 
         if file_size < self.program_input.fragment_size {
-            println!("File {} is already less than {} kB, no work is done!", 
+            println!("{} {} is already less than {} kB, no work is done!", 
+                if metadata.is_file() { "File" } else { "Directory" },
                 self.program_input.input_filename, 
                 self.program_input.fragment_size / 1024
             );
