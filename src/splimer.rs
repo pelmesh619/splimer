@@ -34,6 +34,63 @@ impl Splimer {
             records: Vec::new()
         };
     }
+    pub fn make_dir_file(&mut self) {
+        let _ = self.scan_directory(
+            &self.make_output_dir_filename(&self.program_input.input_filename)
+        );
+    }
+    
+    fn scan_directory(&mut self, output_file: &str) -> io::Result<()> {
+        let root_path = Path::new(&self.program_input.input_filename).canonicalize()?;
+        
+        let files = Self::collect_files_recursively(&root_path)?;
+        
+        let mut offset = 0;
+        self.records = Vec::new();
+        
+        for (path, size) in files {
+            let fragment_index = offset / self.program_input.fragment_size;
+            
+            let relative_path = path.strip_prefix(&root_path)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .into_owned();
+            
+            self.records.push(FileRecord {
+                path: relative_path,
+                size,
+                offset,
+                fragment_index,
+            });
+            
+            offset += size;
+        }
+
+        let file = File::create(output_file)?;
+        serde_json::to_writer_pretty(file, &self.records)?;
+        
+        Ok(())
+    }
+
+    fn collect_files_recursively(root: &Path) -> io::Result<Vec<(PathBuf, usize)>> {
+        let mut files = Vec::new();
+        Self::collect_files(root, &mut files)?;
+        Ok(files)
+    }
+    fn collect_files(current_dir: &Path, files: &mut Vec<(PathBuf, usize)>) -> io::Result<()> {
+        for entry in fs::read_dir(current_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::metadata(&path)?;
+    
+            if metadata.is_file() {
+                files.push((path, metadata.len() as usize));
+            } else if metadata.is_dir() {
+                Self::collect_files(&path, files)?;
+            }
+        }
+        Ok(())
+    }
 
 
 
