@@ -32,16 +32,49 @@ impl Splimer {
         };
     }
 
-    pub fn split(&mut self) {
-        let file = OpenOptions::new()
-            .read(true)
-            .open(&self.program_input.input_filename);
-        let mut file = Self::check_file_access(file);
 
-        let metadata = Self::check_file_access(file.metadata());
 
-        let file_size = metadata.len() as usize;
-        
+    pub fn split(&mut self) {    
+        let full_path = fs::canonicalize(&self.program_input.input_filename).expect("Failed to canonicalize path");
+    
+        let full_path = if let Some(full_path_str) = full_path.to_str() {
+            full_path_str.strip_prefix(r"\\?\").unwrap_or(full_path_str)
+        } else {
+            full_path.to_str().unwrap()
+        };
+
+        let metadata = Self::check_file_access(fs::metadata(full_path));
+        let parent_directory;
+        if metadata.is_dir() {
+            parent_directory = Path::new(full_path);
+            self.make_dir_file();
+            if self.records.is_empty() {
+                println!("The directory {} is empty to split, no work is done", 
+                    self.program_input.input_filename
+                );
+                return;
+            }
+        } else if metadata.is_file() {
+            parent_directory = Path::new(full_path).parent().unwrap();
+            self.records = vec!(
+                FileRecord { 
+                    path: self.program_input.input_filename.clone(), 
+                    size: metadata.len() as usize, 
+                    offset: 0usize, 
+                    fragment_index: 0usize
+                }
+            );
+        } else {
+            println!("Path {} is neither file nor directory, no work is done", 
+                self.program_input.input_filename, 
+            );
+            return;
+        }
+        let file_size = {
+            let r = self.records.last().unwrap();
+            r.offset + r.size
+        };
+
         if let Some(parts) = self.program_input.parts {
             self.program_input.fragment_size = (file_size + parts - 1) / parts;
         }
@@ -81,49 +114,61 @@ impl Splimer {
         let mut fragment_number = self.program_input.part_number.unwrap_or(1);
         let mut bytes_written = 0;
         let mut total_bytes_written = 0;
+        let mut file_to_read_index = 0;
 
         self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
 
-        if self.program_input.part_number.is_some() {
-            Self::check_file_access(
-                file.seek(SeekFrom::Start(((fragment_number - 1) * self.program_input.fragment_size) as u64))
-            );
-        }
+        
+        while file_to_read_index < self.records.len() {
+            let file_record = &self.records[file_to_read_index];
+            let file = OpenOptions::new()
+                .read(true)
+                .open(Path::new(parent_directory).join(file_record.path.as_str()));
+            let mut file = Self::check_file_access(file);
 
-        while let Ok(size) = file.read(&mut buffer) {
-            if size == 0 {
-                break;
+            if self.program_input.part_number.is_some() {
+                Self::check_file_access(
+                    file.seek(SeekFrom::Start(((fragment_number - 1) * self.program_input.fragment_size) as u64))
+                );
             }
 
-            let how_many = min(size, self.program_input.fragment_size - bytes_written);
-            self.write_bytes(buffer[..how_many].as_ref());
-
-            bytes_written += how_many;
-            if bytes_written == self.program_input.fragment_size {
-                if file_size == bytes_written * fragment_number as usize ||
-                self.program_input.part_number.is_some() {
+            while let Ok(size) = file.read(&mut buffer) {
+                if size == 0 {
                     break;
                 }
-                self.flush();
-                total_bytes_written += bytes_written;
-                println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-                    self.make_output_filename(fragment_number, &self.program_input.input_filename),
-                    total_bytes_written / 1024,
-                    file_size / 1024,
-                    fill = (file_size / 1024).to_string().len()
-                );
-                fragment_number += 1;
 
-                self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
-                bytes_written = size - how_many;
+                let how_many = min(size, self.program_input.fragment_size - bytes_written);
+                self.write_bytes(buffer[..how_many].as_ref());
 
-                if how_many == size {
-                    continue;
+                bytes_written += how_many;
+                if bytes_written == self.program_input.fragment_size {
+                    if file_size == bytes_written * fragment_number as usize ||
+                    self.program_input.part_number.is_some() {
+                        break; // all fragments are written
+                    }
+                    self.flush();
+                    total_bytes_written += bytes_written;
+                    println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
+                        self.make_output_filename(fragment_number, &self.program_input.input_filename),
+                        total_bytes_written / 1024,
+                        file_size / 1024,
+                        fill = (file_size / 1024).to_string().len()
+                    );
+                    fragment_number += 1;
+
+                    self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
+                    bytes_written = size - how_many;
+
+                    if how_many == size {
+                        continue;
+                    }
+                    self.write_bytes(buffer[how_many..].as_ref());
                 }
-                self.write_bytes(buffer[how_many..].as_ref());
             }
+            self.flush();
+            file_to_read_index += 1;
         }
-        self.flush();
+
         total_bytes_written += bytes_written;
         println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
             self.make_output_filename(fragment_number, &self.program_input.input_filename),
