@@ -266,7 +266,12 @@ impl Splimer {
     }
 
     fn make_output_filename(&self, fragment_number: usize, pattern: &String) -> String {
-        let filename = Path::new(pattern).file_stem().unwrap().to_str().unwrap();
+        let filename = Path::new(pattern);
+        let filename = if let Some(f) = filename.file_stem() {
+            f
+        } else {
+            filename.parent().unwrap().file_stem().unwrap()
+        }.to_str().unwrap();
 
         let filename = filename.to_string() + 
             "_[" + &fragment_number.to_string().to_owned() + "].splm";
