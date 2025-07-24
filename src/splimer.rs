@@ -230,7 +230,28 @@ impl Splimer {
                 .join(filename)
                 .to_str().unwrap().to_string()
         } else {
-            return Path::new(pattern).parent().unwrap()
+            Path::new(pattern).parent().unwrap()
+                .join(Path::new(&filename))
+                .to_str().unwrap().to_string()
+        }        
+    }
+    fn make_output_dir_filename(&self, pattern: &String) -> String {
+        let full_path = fs::canonicalize(pattern).unwrap();
+        let filename = Path::new(full_path.as_path());
+        let filename = if let Some(f) = filename.file_stem() {
+            f
+        } else {
+            filename.parent().unwrap().file_stem().unwrap()
+        }.to_str().unwrap();
+
+        let filename = filename.to_string() + ".dir.splm";
+
+        if let Some(dir) = &self.program_input.output_directory {
+            Path::new(&dir)
+                .join(filename)
+                .to_str().unwrap().to_string()
+        } else {
+            Path::new(pattern).parent().unwrap()
                 .join(Path::new(&filename))
                 .to_str().unwrap().to_string()
         }        
