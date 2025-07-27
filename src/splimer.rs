@@ -179,7 +179,10 @@ impl Splimer {
 
         let file_size = part_number.and(Some(self.program_input.fragment_size)).or(Some(file_size)).unwrap();
 
-        self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename, true));
+        let binding = self.make_output_filename(fragment_number, &self.program_input.input_filename, true);
+        let fragment_filepath= Path::new(&binding);
+        let fragment_filepath = Path::new(self.program_input.output_directory.clone().unwrap_or(String::new()).as_str()).join(fragment_filepath.file_name().unwrap());
+        self.open_file_for_write(&fragment_filepath.to_str().unwrap().to_string());
 
         
         while file_to_read_index < self.records.len() {
@@ -229,7 +232,11 @@ impl Splimer {
                     );
                     fragment_number += 1;
 
-                    self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename, true));
+                    let binding = self.make_output_filename(fragment_number, &self.program_input.input_filename, true);
+                    let fragment_filepath= Path::new(&binding);
+                    let fragment_filepath = Path::new(self.program_input.output_directory.clone().unwrap_or(String::new()).as_str()).join(fragment_filepath.file_name().unwrap());
+                    self.open_file_for_write(&fragment_filepath.to_str().unwrap().to_string());
+            
                     bytes_written = size - how_many;
 
                     if how_many == size {
