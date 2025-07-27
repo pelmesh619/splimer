@@ -354,6 +354,7 @@ impl Splimer {
             )
         );
 
+        'file_loop:
         while file_to_write_index < self.records.len() {
             let file_record = &self.records[file_to_write_index];
             if let Some(parent) = Path::new(&file_record.path).parent() {
@@ -414,19 +415,25 @@ impl Splimer {
                         fragment_number += 1;
                         buffer_offset = 0;
                         if file_to_write_index + 1 == self.records.len() && file_size == bytes_read {
-                            break;
+                            break 'file_loop;
                         }
 
-                        file_to_read = Self::check_file_access(
-                            OpenOptions::new()
-                                .read(true)
-                                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
-                            )
+                        let f = OpenOptions::new()
+                            .read(true)
+                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
                         );
+
+                        if let Err(_) = f {
+                            if is_single_file {
+                                break 'file_loop;
+                            }
+                        }
+
+                        file_to_read = Self::check_file_access(f);
                         break;
                     }
 
-                    let how_many = min(buffer_size, file_size - bytes_read);
+                    let how_many = if is_single_file { buffer_size } else { min(buffer_size, file_size - bytes_read) };
                     self.write_bytes(buffer[..how_many].as_ref());
                     buffer_offset = how_many;
 
