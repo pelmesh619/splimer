@@ -397,4 +397,11 @@ impl Splimer {
         }
     }
 
+    fn read_metadata(&mut self, file: &File) -> io::Result<()> {
+        let reader = BufReader::new(file);
+        self.records = serde_json::from_reader(reader).expect("Directory file is corrupted and cannot be read!");
+
+        Ok(())
+    }
+
 }
