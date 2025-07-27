@@ -284,6 +284,7 @@ impl Splimer {
         let file_path = Path::new(binding.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(&binding.to_str().unwrap()));
 
 
+        // checking, if XXX.dir.splm is a real thing
         let dir_metadata = fs::metadata({
             let re = Regex::new(r"_\[\d+\]$").unwrap();
             let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
@@ -376,7 +377,9 @@ impl Splimer {
             let file_fragment_index = file_record.fragment_index;
 
             let mut bytes_read = 0;
+
             if buffer_offset < buffer_size {
+                // some bytes have left in the buffer
                 let how_many = min(buffer_size - buffer_offset, file_size);
                 self.write_bytes(buffer[buffer_offset..how_many + buffer_offset].as_ref());
                 buffer_offset = how_many + buffer_offset;
@@ -398,6 +401,8 @@ impl Splimer {
             }
 
             while bytes_read < file_size || is_single_file {
+                // checking that we are reading right fragment file
+                // in case of incorrect order of file records
                 if file_fragment_index + 1 > fragment_number {
                     fragment_number = file_fragment_index + 1;
                     file_to_read = Self::check_file_access(
@@ -412,9 +417,11 @@ impl Splimer {
                 while let Ok(size) = file_to_read.read(&mut buffer) {
                     buffer_size = size;
                     if buffer_size == 0 {
+                        // buffer is empty = fragment file is empty
                         fragment_number += 1;
                         buffer_offset = 0;
                         if file_to_write_index + 1 == self.records.len() && file_size == bytes_read {
+                            // all files are read (presumably)
                             break 'file_loop;
                         }
 
@@ -425,6 +432,7 @@ impl Splimer {
 
                         if let Err(_) = f {
                             if is_single_file {
+                                // all files are read (also presumably)
                                 break 'file_loop;
                             }
                         }
