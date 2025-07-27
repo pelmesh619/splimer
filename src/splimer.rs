@@ -308,7 +308,7 @@ impl Splimer {
         } else if let Ok(d) = dir_metadata {
             if !d.is_file() {
                 eprintln!(
-                    "Directory file {} is not a file at all",
+                    "Directory file {} is not a file at all, no work is done",
                     self.make_output_dir_filename(&file_path.to_str().unwrap().to_string())
                 );
                 return;
@@ -408,10 +408,12 @@ impl Splimer {
                     file_to_read = Self::check_file_access(
                         OpenOptions::new()
                             .read(true)
-                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
-                        )
+                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename))
                     );
-                    file_to_read.seek(SeekFrom::Start(file_offset as u64)).expect("TODO");
+                    file_to_read.seek(SeekFrom::Start(file_offset as u64))
+                        .expect(
+                            format!("Cannot access to file {}, panicking", self.make_output_filename(fragment_number, &self.program_input.input_filename)).as_str()
+                        );
                 }
 
                 while let Ok(size) = file_to_read.read(&mut buffer) {
