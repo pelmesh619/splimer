@@ -179,7 +179,7 @@ impl Splimer {
 
         let file_size = part_number.and(Some(self.program_input.fragment_size)).or(Some(file_size)).unwrap();
 
-        self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
+        self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename, true));
 
         
         while file_to_read_index < self.records.len() {
@@ -222,14 +222,14 @@ impl Splimer {
                     }
                     total_bytes_written += bytes_written;
                     println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-                        self.make_output_filename(fragment_number, &self.program_input.input_filename),
+                        self.make_output_filename(fragment_number, &self.program_input.input_filename, true),
                         total_bytes_written / 1024,
                         file_size / 1024,
                         fill = (file_size / 1024).to_string().len()
                     );
                     fragment_number += 1;
 
-                    self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename));
+                    self.open_file_for_write(&self.make_output_filename(fragment_number, &self.program_input.input_filename, true));
                     bytes_written = size - how_many;
 
                     if how_many == size {
@@ -244,7 +244,7 @@ impl Splimer {
 
         total_bytes_written += bytes_written;
         println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-            self.make_output_filename(fragment_number, &self.program_input.input_filename),
+            self.make_output_filename(fragment_number, &self.program_input.input_filename, true),
             total_bytes_written / 1024,
             file_size / 1024,
             fill = (file_size / 1024).to_string().len()
@@ -266,10 +266,12 @@ impl Splimer {
                 .to_string();
         }
 
+        let output_directory = Path::new(&self.program_input.output_directory.clone().unwrap_or(String::new())).join(Path::new(&self.program_input.input_filename).file_name().unwrap());
+
         // get first fragment path
         let first_fragment_path = fs::canonicalize(
-            self.make_output_filename(1, &self.program_input.input_filename)
-        ).expect("Failed to canonicalize path");
+            self.make_output_filename(1, &self.program_input.input_filename, false)
+        ).expect(format!("Failed to canonicalize path of first fragment {}, check its presence", self.make_output_filename(1, &self.program_input.input_filename, false)).as_str());
 
         let parent_directory = first_fragment_path.parent().unwrap();
         let file_path = parent_directory;
@@ -351,7 +353,7 @@ impl Splimer {
             OpenOptions::new()
                 .read(true)
                 .create(false)
-                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)
             )
         );
 
@@ -359,8 +361,9 @@ impl Splimer {
         while file_to_write_index < self.records.len() {
             let file_record = &self.records[file_to_write_index];
             if let Some(parent) = Path::new(&file_record.path).parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).expect("Cannot create a directory!");
+                let p = output_directory.join(parent);
+                if !p.exists() {
+                    fs::create_dir_all(p).expect("Cannot create a directory!");
                 }
             }
             self.current_file_to_write = Some(
@@ -369,7 +372,7 @@ impl Splimer {
                         .write(true)
                         .truncate(true)
                         .create(true)
-                        .open(&file_record.path)
+                        .open(output_directory.join(&file_record.path))
                 )
             );
             let file_size = file_record.size;
@@ -408,11 +411,11 @@ impl Splimer {
                     file_to_read = Self::check_file_access(
                         OpenOptions::new()
                             .read(true)
-                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename))
+                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file))
                     );
                     file_to_read.seek(SeekFrom::Start(file_offset as u64))
                         .expect(
-                            format!("Cannot access to file {}, panicking", self.make_output_filename(fragment_number, &self.program_input.input_filename)).as_str()
+                            format!("Cannot access to file {}, panicking", self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)).as_str()
                         );
                 }
 
@@ -429,7 +432,7 @@ impl Splimer {
 
                         let f = OpenOptions::new()
                             .read(true)
-                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)
                         );
 
                         if let Err(_) = f {
@@ -463,7 +466,7 @@ impl Splimer {
 
                 self.flush();
                 println!("File {} is read, total kilobytes written - {}", 
-                    self.make_output_filename(fragment_number, &self.program_input.input_filename),
+                    self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file),
                     bytes_written / 1024
                 );
             }
@@ -503,26 +506,24 @@ impl Splimer {
         }
     }
 
-    fn make_output_filename(&self, fragment_number: usize, pattern: &String) -> String {
+    fn make_output_filename(&self, fragment_number: usize, pattern: &String, remove_ext: bool) -> String {
         let filename = Path::new(pattern);
-        let filename = if let Some(f) = filename.file_stem() {
-            f
+        let filename = if remove_ext {
+            if let Some(f) = filename.file_stem() {
+                f
+            } else {
+                filename.parent().unwrap().file_stem().unwrap()
+            }
         } else {
-            filename.parent().unwrap().file_stem().unwrap()
+            filename.file_name().unwrap()
         }.to_str().unwrap();
 
         let filename = filename.to_string() + 
             "_[" + &fragment_number.to_string().to_owned() + "].splm";
 
-        if let Some(dir) = &self.program_input.output_directory {
-            Path::new(&dir)
-                .join(filename)
-                .to_str().unwrap().to_string()
-        } else {
-            Path::new(pattern).parent().unwrap()
-                .join(Path::new(&filename))
-                .to_str().unwrap().to_string()
-        }        
+        Path::new(pattern).parent().unwrap()
+            .join(Path::new(&filename))
+            .to_str().unwrap().to_string()
     }
     fn make_output_dir_filename(&self, pattern: &String) -> String {
         let full_path = fs::canonicalize(pattern).unwrap();
