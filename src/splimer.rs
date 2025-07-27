@@ -354,7 +354,6 @@ impl Splimer {
         let mut fragment_number = 1;
         let mut bytes_written = 0usize;
         let mut file_to_write_index = 0;
-        let mut total_bytes_written = 0;
 
         let mut file_to_read = Self::check_file_access(
             OpenOptions::new()
@@ -385,6 +384,7 @@ impl Splimer {
             let file_size = file_record.size;
             let file_offset = file_record.offset;
             let file_fragment_index = file_record.fragment_index;
+            let file_path = file_record.path.clone();
 
             let mut bytes_read = 0;
 
@@ -398,11 +398,9 @@ impl Splimer {
                 bytes_written += how_many;
                 if buffer_size > buffer_offset {
                     self.flush();
-                    total_bytes_written += bytes_written;
-                    println!("File {} is written, total written - {:0fill$} kB", 
-                        file_path.display(),
-                        total_bytes_written / 1024,
-                        fill = (file_size / 1024).to_string().len()
+                    println!("File {} is written, total written - {} kB", 
+                        file_path,
+                        bytes_written / 1024
                     );
                     file_to_write_index += 1;
                     continue;
@@ -410,6 +408,7 @@ impl Splimer {
                 buffer_offset = 0;
             }
 
+            'fragment_loop:
             while bytes_read < file_size || is_single_file {
                 // checking that we are reading right fragment file
                 // in case of incorrect order of file records
@@ -430,11 +429,15 @@ impl Splimer {
                     buffer_size = size;
                     if buffer_size == 0 {
                         // buffer is empty = fragment file is empty
+                        println!("File {} is read, total read - {} kB", 
+                            self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file),
+                            bytes_written / 1024
+                        );
                         fragment_number += 1;
                         buffer_offset = 0;
                         if file_to_write_index + 1 == self.records.len() && file_size == bytes_read {
                             // all files are read (presumably)
-                            break 'file_loop;
+                            break 'fragment_loop;
                         }
 
                         let f = OpenOptions::new()
@@ -461,26 +464,20 @@ impl Splimer {
                     bytes_written += how_many;
                     if buffer_size > how_many {
                         self.flush();
-                        total_bytes_written += bytes_written;
-                        println!("File {} is written, total written - {:0fill$} kB", 
-                            file_path.display(),
-                            total_bytes_written / 1024,
-                            fill = (file_size / 1024).to_string().len()
-                        );
                         break;
                     }
                 }
 
                 self.flush();
-                println!("File {} is read, total kilobytes written - {}", 
-                    self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file),
-                    bytes_written / 1024
-                );
             }
 
+            println!("File {} is written, total written - {} kB", 
+                file_path,
+                bytes_written / 1024
+            );
             file_to_write_index += 1;
         }
-        println!("File {} was merged", &self.program_input.input_filename);
+        println!("{} {} was merged", if is_single_file { "File" } else { "Directory" }, &self.program_input.input_filename);
 
         println!(
             "The job is done! Total passed {:?} s", 
