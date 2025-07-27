@@ -258,52 +258,200 @@ impl Splimer {
     }
 
     pub fn merge(&mut self) {
-        self.current_file_to_write = Some(
-            Self::check_file_access(
-                OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(Self::make_filename_with_suffix(&"_[merged]".to_string(), &self.program_input.input_filename))
-            )
-        );
+        // remove .dir.splm suffix if present
+        if self.program_input.input_filename.ends_with(".dir.splm") {
+            self.program_input.input_filename = self.program_input.input_filename
+                .strip_suffix(".dir.splm")
+                .unwrap()
+                .to_string();
+        }
 
+        // get first fragment path
+        let first_fragment_path = fs::canonicalize(
+            self.make_output_filename(1, &self.program_input.input_filename)
+        ).expect("Failed to canonicalize path");
+
+        let parent_directory = first_fragment_path.parent().unwrap();
+        let file_path = parent_directory.clone();
+        
+        let binding = file_path.join(
+            if let Some(full_path_str) = first_fragment_path.file_stem().unwrap().to_str() {
+                full_path_str
+            } else {
+                first_fragment_path.as_os_str().to_str().unwrap()
+            }
+        );
+        let file_path = Path::new(binding.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(&binding.to_str().unwrap()));
+
+
+        let dir_metadata = fs::metadata({
+            let re = Regex::new(r"_\[\d+\]$").unwrap();
+            let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
+            s.push_str(".dir.splm");
+            s
+        }
+        );
+        
+        let mut is_single_file = false;
+        if let Err(_) = dir_metadata {
+            // single file case
+            self.records = vec!(
+                FileRecord { 
+                    path: self.program_input.input_filename.clone(), 
+                    size: 0 as usize, 
+                    offset: 0usize, 
+                    fragment_index: 0usize
+                }
+            );
+            is_single_file = true;
+        } else if let Ok(d) = dir_metadata {
+            if !d.is_file() {
+                eprintln!(
+                    "Directory file {} is not a file at all",
+                    self.make_output_dir_filename(&file_path.to_str().unwrap().to_string())
+                );
+                return;
+            }
+            
+            let dir_file= Self::check_file_access(
+                OpenOptions::new()
+                    .read(true)
+                    .open({
+                        let re = Regex::new(r"_\[\d+\]$").unwrap();
+                        let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
+                        s.push_str(".dir.splm");
+                        s
+                    })
+            );
+
+            self.read_metadata(&dir_file).expect("TODO");
+
+            if self.records.len() == 0 {
+                eprintln!("{} is not containing any files, no work is done", self.program_input.input_filename);
+                return;
+            }
+        }
+        
         let start = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis();
 
         let mut buffer = vec![0; MAX_BUFFER_SIZE];
+        let mut buffer_size = 0;
+        let mut buffer_offset = 0;
 
         let mut fragment_number = 1;
         let mut bytes_written = 0usize;
+        let mut file_to_write_index = 0;
+        let mut total_bytes_written = 0;
 
-        while let Ok(_) = fs::metadata(self.make_output_filename(fragment_number, &self.program_input.input_filename)) {
-            let mut file = Self::check_file_access(
-                OpenOptions::new()
-                    .read(true)
-                    .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+        let mut file_to_read = Self::check_file_access(
+            OpenOptions::new()
+                .read(true)
+                .create(false)
+                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+            )
+        );
+
+        while file_to_write_index < self.records.len() {
+            let file_record = &self.records[file_to_write_index];
+            if let Some(parent) = Path::new(&file_record.path).parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent).expect("Cannot create a directory!");
+                }
+            }
+            self.current_file_to_write = Some(
+                Self::check_file_access(
+                    OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(&file_record.path)
                 )
             );
+            let file_size = file_record.size;
+            let file_offset = file_record.offset;
+            let file_fragment_index = file_record.fragment_index;
 
-            while let Ok(size) = file.read(&mut buffer) {
-                if size == 0 {
-                    break;
+            let mut bytes_read = 0;
+            if buffer_offset < buffer_size {
+                let how_many = min(buffer_size - buffer_offset, file_size);
+                self.write_bytes(buffer[buffer_offset..how_many + buffer_offset].as_ref());
+                buffer_offset = how_many + buffer_offset;
+
+                bytes_read += how_many;
+                bytes_written += how_many;
+                if buffer_size > buffer_offset {
+                    self.flush();
+                    total_bytes_written += bytes_written;
+                    println!("File {} is written, total written - {:0fill$} kB", 
+                        file_path.display(),
+                        total_bytes_written / 1024,
+                        fill = (file_size / 1024).to_string().len()
+                    );
+                    file_to_write_index += 1;
+                    continue;
                 }
-    
-                self.write_bytes(buffer[..size].as_ref());
-                bytes_written += size;
+                buffer_offset = 0;
             }
 
-            self.flush();
-            println!("File {} is read, total kilobytes written - {}", 
-                self.make_output_filename(fragment_number, &self.program_input.input_filename),
-                bytes_written / 1024
-            );
+            while bytes_read < file_size || is_single_file {
+                if file_fragment_index + 1 > fragment_number {
+                    fragment_number = file_fragment_index + 1;
+                    file_to_read = Self::check_file_access(
+                        OpenOptions::new()
+                            .read(true)
+                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+                        )
+                    );
+                    file_to_read.seek(SeekFrom::Start(file_offset as u64)).expect("TODO");
+                }
 
-            fragment_number += 1;
+                while let Ok(size) = file_to_read.read(&mut buffer) {
+                    buffer_size = size;
+                    if buffer_size == 0 {
+                        fragment_number += 1;
+                        buffer_offset = 0;
+                        if file_to_write_index + 1 == self.records.len() && file_size == bytes_read {
+                            break;
+                        }
 
+                        file_to_read = Self::check_file_access(
+                            OpenOptions::new()
+                                .read(true)
+                                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename)
+                            )
+                        );
+                        break;
+                    }
 
+                    let how_many = min(buffer_size, file_size - bytes_read);
+                    self.write_bytes(buffer[..how_many].as_ref());
+                    buffer_offset = how_many;
+
+                    bytes_read += how_many;
+                    bytes_written += how_many;
+                    if buffer_size > how_many {
+                        self.flush();
+                        total_bytes_written += bytes_written;
+                        println!("File {} is written, total written - {:0fill$} kB", 
+                            file_path.display(),
+                            total_bytes_written / 1024,
+                            fill = (file_size / 1024).to_string().len()
+                        );
+                        break;
+                    }
+                }
+
+                self.flush();
+                println!("File {} is read, total kilobytes written - {}", 
+                    self.make_output_filename(fragment_number, &self.program_input.input_filename),
+                    bytes_written / 1024
+                );
+            }
+
+            file_to_write_index += 1;
         }
         println!("File {} was merged", &self.program_input.input_filename);
 
