@@ -272,7 +272,7 @@ impl Splimer {
         ).expect("Failed to canonicalize path");
 
         let parent_directory = first_fragment_path.parent().unwrap();
-        let file_path = parent_directory.clone();
+        let file_path = parent_directory;
         
         let binding = file_path.join(
             if let Some(full_path_str) = first_fragment_path.file_stem().unwrap().to_str() {
