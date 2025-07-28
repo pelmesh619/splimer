@@ -226,12 +226,7 @@ impl Splimer {
                         break; // all fragments are written
                     }
                     total_bytes_written += bytes_written;
-                    println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-                        self.make_output_filename(fragment_number, &self.program_input.input_filename, true),
-                        total_bytes_written / 1024,
-                        file_size / 1024,
-                        fill = (file_size / 1024).to_string().len()
-                    );
+                    self.log_fragment_written(fragment_number, total_bytes_written, file_size);
                     fragment_number += 1;
 
                     let binding = self.make_output_filename(fragment_number, &self.program_input.input_filename, true);
@@ -252,18 +247,26 @@ impl Splimer {
         }
 
         total_bytes_written += bytes_written;
-        println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
-            self.make_output_filename(fragment_number, &self.program_input.input_filename, true),
-            total_bytes_written / 1024,
-            file_size / 1024,
-            fill = (file_size / 1024).to_string().len()
-        );
 
-        println!(
-            "The job is done! Total passed {:?} s", 
-            (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
-        );
+        self.log_fragment_written(fragment_number, total_bytes_written, file_size);
 
+        if !self.program_input.is_quiet {
+            println!(
+                "The job is done! Total passed {:?} s", 
+                (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
+            );
+        }
+    }
+
+    fn log_fragment_written(&self, fragment_number: usize, total_bytes_written: usize, file_size: usize) {
+        if !self.program_input.is_quiet {
+            println!("File {} is written, total written - {:0fill$} kB  /  {} kB", 
+                self.make_output_filename(fragment_number, &self.program_input.input_filename, true),
+                total_bytes_written / 1024,
+                file_size / 1024,
+                fill = (file_size / 1024).to_string().len()
+            );
+        }
     }
 
     pub fn merge(&mut self) {
@@ -339,7 +342,7 @@ impl Splimer {
     
                 if buffer_size > buffer_offset {
                     self.flush();
-                    self.report_file_written(&file_path, bytes_written);
+                    self.log_file_written(&file_path, bytes_written);
                     file_to_write_index += 1;
                     continue;
                 }
@@ -362,7 +365,7 @@ impl Splimer {
     
                 while let Ok(size) = file_to_read.read(&mut buffer) {
                     if size == 0 {
-                        self.report_fragment_read(fragment_number, input_filename, bytes_written);
+                        self.log_fragment_read(fragment_number, input_filename, bytes_written);
                         fragment_number += 1;
                         buffer_offset = 0;
     
@@ -403,20 +406,22 @@ impl Splimer {
                 self.flush();
             }
     
-            self.report_file_written(&file_path, bytes_written);
+            self.log_file_written(&file_path, bytes_written);
             file_to_write_index += 1;
         }
     
-        println!(
-            "{} {} was merged",
-            if is_single_file { "File" } else { "Directory" },
-            input_filename
-        );
-    
-        println!(
-            "The job is done! Total passed {:.3} s",
-            (Self::current_time_millis() - start_time) as f64 / 1000.0
-        );
+        if !self.program_input.is_quiet {
+            println!(
+                "{} {} was merged",
+                if is_single_file { "File" } else { "Directory" },
+                input_filename
+            );
+        
+            println!(
+                "The job is done! Total passed {:.3} s",
+                (Self::current_time_millis() - start_time) as f64 / 1000.0
+            );
+        }
     }
     
     fn strip_input_suffix(&mut self) {
@@ -476,16 +481,20 @@ impl Splimer {
         }
     }
     
-    fn report_file_written(&self, path: &str, bytes: usize) {
-        println!("File {} is written, total written - {} kB", path, bytes / 1024);
+    fn log_file_written(&self, path: &str, bytes: usize) {
+        if !self.program_input.is_quiet {
+            println!("File {} is written, total written - {} kB", path, bytes / 1024);
+        }
     }
     
-    fn report_fragment_read(&self, number: usize, name: &str, bytes: usize) {
-        println!(
-            "File {} is read, total read - {} kB",
-            self.make_output_filename(number, &name.to_string(), false),
-            bytes / 1024
-        );
+    fn log_fragment_read(&self, number: usize, name: &str, bytes: usize) {
+        if !self.program_input.is_quiet {
+            println!(
+                "File {} is read, total read - {} kB",
+                self.make_output_filename(number, &name.to_string(), false),
+                bytes / 1024
+            );
+        }
     }
     
     fn current_time_millis() -> u128 {
