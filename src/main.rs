@@ -87,6 +87,7 @@ splimer
 
     -q
     --quiet                                 Quiet mode, removes all console output
+                                            (if program exited right)
 
     -h 
     --help                                  Show help message"
