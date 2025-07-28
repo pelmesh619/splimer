@@ -480,6 +480,12 @@ impl Splimer {
             (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
         );
 
+    
+    fn current_time_millis() -> u128 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
     }
 
     fn write_bytes(&mut self, buffer: &[u8]) {
