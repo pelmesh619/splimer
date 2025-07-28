@@ -267,219 +267,226 @@ impl Splimer {
     }
 
     pub fn merge(&mut self) {
-        // remove .dir.splm suffix if present
-        if self.program_input.input_filename.ends_with(".dir.splm") {
-            self.program_input.input_filename = self.program_input.input_filename
-                .strip_suffix(".dir.splm")
-                .unwrap()
-                .to_string();
-        }
-
-        let output_directory = Path::new(&self.program_input.output_directory.clone().unwrap_or(String::new())).join(Path::new(&self.program_input.input_filename).file_name().unwrap());
-
-        // get first fragment path
-        let first_fragment_path = fs::canonicalize(
-            self.make_output_filename(1, &self.program_input.input_filename, false)
-        ).expect(format!("Failed to canonicalize path of first fragment {}, check its presence", self.make_output_filename(1, &self.program_input.input_filename, false)).as_str());
-
-        let parent_directory = first_fragment_path.parent().unwrap();
-        let file_path = parent_directory;
-        
-        let binding = file_path.join(
-            if let Some(full_path_str) = first_fragment_path.file_stem().unwrap().to_str() {
-                full_path_str
-            } else {
-                first_fragment_path.as_os_str().to_str().unwrap()
-            }
-        );
-        let file_path = Path::new(binding.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(&binding.to_str().unwrap()));
-
-
-        // checking, if XXX.dir.splm is a real thing
-        let dir_filename = {
-            let re = Regex::new(r"_\[\d+\]$").unwrap();
-            let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
-            s.push_str(".dir.splm");
-            s
-        };
-        let dir_metadata = fs::metadata(&dir_filename);
-        
-        let mut is_single_file = false;
-        if let Err(_) = dir_metadata {
-            // single file case
-            self.records = vec!(
-                FileRecord { 
-                    path: self.program_input.input_filename.clone(), 
-                    size: 0 as usize, 
-                    offset: 0usize, 
-                    fragment_index: 0usize
+        self.strip_input_suffix();
+    
+        let input_filename = &self.program_input.input_filename.clone();
+        let output_directory = self.make_output_directory_path();
+    
+        let first_fragment_path = self.get_first_fragment_path(input_filename);
+        let file_path = self.get_sanitized_file_path(&first_fragment_path);
+    
+        let dir_filename = self.make_dir_filename(&file_path);
+        let is_single_file = match fs::metadata(&dir_filename) {
+            Ok(meta) if meta.is_file() => {
+                let dir_file = Self::check_file_access(OpenOptions::new().read(true).open(&dir_filename));
+                self.read_metadata(&dir_file).expect("Failed to read metadata");
+                if self.records.is_empty() {
+                    eprintln!("{} contains no files, no work is done", input_filename);
+                    return;
                 }
-            );
-            is_single_file = true;
-        } else if let Ok(d) = dir_metadata {
-            if !d.is_file() {
-                eprintln!(
-                    "Directory file {} is not a file at all, no work is done", &dir_filename
-                );
-                return;
+                false
             }
-            
-            let dir_file= Self::check_file_access(
-                OpenOptions::new()
-                    .read(true)
-                    .open(&dir_filename)
-            );
-
-            self.read_metadata(&dir_file).expect("TODO");
-
-            if self.records.len() == 0 {
-                eprintln!("{} is not containing any files, no work is done", self.program_input.input_filename);
-                return;
+            _ => {
+                self.records = vec![FileRecord {
+                    path: input_filename.clone(),
+                    size: 0,
+                    offset: 0,
+                    fragment_index: 0,
+                }];
+                true
             }
-        }
-        
-        let start = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-
+        };
+    
+        let start_time = Self::current_time_millis();
         let mut buffer = vec![0; MAX_BUFFER_SIZE];
-        let mut buffer_size = 0;
-        let mut buffer_offset = 0;
-
+    
+        let mut file_to_write_index = 0;
         let mut fragment_number = 1;
         let mut bytes_written = 0usize;
-        let mut file_to_write_index = 0;
-
+    
+        let mut buffer_size = 0;
+        let mut buffer_offset = 0;
+    
         let mut file_to_read = Self::check_file_access(
             OpenOptions::new()
                 .read(true)
-                .create(false)
-                .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)
-            )
+                .open(self.make_output_filename(fragment_number, input_filename, is_single_file)),
         );
-
-        'file_loop:
+    
         while file_to_write_index < self.records.len() {
             let file_record = &self.records[file_to_write_index];
-            if let Some(parent) = Path::new(&file_record.path).parent() {
-                let p = output_directory.join(parent);
-                if !p.exists() {
-                    fs::create_dir_all(p).expect("Cannot create a directory!");
-                }
-            }
-            self.current_file_to_write = Some(
-                Self::check_file_access(
-                    OpenOptions::new()
-                        .write(true)
-                        .truncate(true)
-                        .create(true)
-                        .open(output_directory.join(&file_record.path))
-                )
-            );
-            let file_size = file_record.size;
-            let file_offset = file_record.offset;
-            let file_fragment_index = file_record.fragment_index;
+            self.ensure_output_directory(&output_directory, &file_record.path);
+    
+            self.current_file_to_write = Some(Self::check_file_access(
+                OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(output_directory.join(&file_record.path)),
+            ));
+    
+            let (mut bytes_read, file_size, file_offset, file_fragment_index) =
+                (0, file_record.size, file_record.offset, file_record.fragment_index);
             let file_path = file_record.path.clone();
-
-            let mut bytes_read = 0;
-
+    
             if buffer_offset < buffer_size {
                 // some bytes have left in the buffer
                 let how_many = min(buffer_size - buffer_offset, file_size);
-                self.write_bytes(buffer[buffer_offset..how_many + buffer_offset].as_ref());
-                buffer_offset = how_many + buffer_offset;
-
+                self.write_bytes(&buffer[buffer_offset..buffer_offset + how_many]);
+                buffer_offset += how_many;
                 bytes_read += how_many;
                 bytes_written += how_many;
+    
                 if buffer_size > buffer_offset {
                     self.flush();
-                    println!("File {} is written, total written - {} kB", 
-                        file_path,
-                        bytes_written / 1024
-                    );
+                    self.report_file_written(&file_path, bytes_written);
                     file_to_write_index += 1;
                     continue;
                 }
                 buffer_offset = 0;
             }
-
-            'fragment_loop:
+    
+            // read fragments loop
             while bytes_read < file_size || is_single_file {
-                // checking that we are reading right fragment file
-                // in case of incorrect order of file records
                 if file_fragment_index + 1 > fragment_number {
                     fragment_number = file_fragment_index + 1;
                     file_to_read = Self::check_file_access(
                         OpenOptions::new()
                             .read(true)
-                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file))
+                            .open(self.make_output_filename(fragment_number, input_filename, is_single_file)),
                     );
-                    file_to_read.seek(SeekFrom::Start(file_offset as u64))
-                        .expect(
-                            format!("Cannot access to file {}, panicking", self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)).as_str()
-                        );
+                    file_to_read
+                        .seek(SeekFrom::Start(file_offset as u64))
+                        .expect("Failed to seek in fragment");
                 }
-
+    
                 while let Ok(size) = file_to_read.read(&mut buffer) {
-                    buffer_size = size;
-                    if buffer_size == 0 {
-                        // buffer is empty = fragment file is empty
-                        println!("File {} is read, total read - {} kB", 
-                            self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file),
-                            bytes_written / 1024
-                        );
+                    if size == 0 {
+                        self.report_fragment_read(fragment_number, input_filename, bytes_written);
                         fragment_number += 1;
                         buffer_offset = 0;
+    
                         if file_to_write_index + 1 == self.records.len() && file_size == bytes_read {
-                            // all files are read (presumably)
-                            break 'fragment_loop;
+                            break;
                         }
-
-                        let f = OpenOptions::new()
+    
+                        match OpenOptions::new()
                             .read(true)
-                            .open(self.make_output_filename(fragment_number, &self.program_input.input_filename, is_single_file)
-                        );
-
-                        if let Err(_) = f {
-                            if is_single_file {
-                                // all files are read (also presumably)
-                                break 'file_loop;
-                            }
+                            .open(self.make_output_filename(fragment_number, input_filename, is_single_file))
+                        {
+                            Ok(next_file) => file_to_read = next_file,
+                            Err(_) if is_single_file => break,
+                            Err(_) => panic!("Missing fragment file."),
                         }
-
-                        file_to_read = Self::check_file_access(f);
+    
                         break;
                     }
-
-                    let how_many = if is_single_file { buffer_size } else { min(buffer_size, file_size - bytes_read) };
-                    self.write_bytes(buffer[..how_many].as_ref());
+    
+                    buffer_size = size;
+                    let how_many = if is_single_file {
+                        buffer_size
+                    } else {
+                        min(buffer_size, file_size - bytes_read)
+                    };
+    
+                    self.write_bytes(&buffer[..how_many]);
                     buffer_offset = how_many;
-
                     bytes_read += how_many;
                     bytes_written += how_many;
+    
                     if buffer_size > how_many {
                         self.flush();
                         break;
                     }
                 }
-
+    
                 self.flush();
             }
-
-            println!("File {} is written, total written - {} kB", 
-                file_path,
-                bytes_written / 1024
-            );
+    
+            self.report_file_written(&file_path, bytes_written);
             file_to_write_index += 1;
         }
-        println!("{} {} was merged", if is_single_file { "File" } else { "Directory" }, &self.program_input.input_filename);
-
+    
         println!(
-            "The job is done! Total passed {:?} s", 
-            (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() - start) as f64 / 1000f64
+            "{} {} was merged",
+            if is_single_file { "File" } else { "Directory" },
+            input_filename
         );
-
+    
+        println!(
+            "The job is done! Total passed {:.3} s",
+            (Self::current_time_millis() - start_time) as f64 / 1000.0
+        );
+    }
+    
+    fn strip_input_suffix(&mut self) {
+        let input = &mut self.program_input.input_filename;
+        if input.ends_with(".dir.splm") {
+            *input = input.strip_suffix(".dir.splm").unwrap().to_string();
+        }
+    }
+    
+    fn make_output_directory_path(&self) -> PathBuf {
+        let input_filename = Path::new(&self.program_input.input_filename);
+        let output_dir = self
+            .program_input
+            .output_directory
+            .clone()
+            .unwrap_or_default();
+    
+        Path::new(&output_dir).join(input_filename.file_name().unwrap())
+    }
+    
+    fn get_first_fragment_path(&self, input_filename: &str) -> PathBuf {
+        let path = self.make_output_filename(1, &input_filename.to_string(), false);
+        fs::canonicalize(&path)
+            .unwrap_or_else(|_| panic!("Failed to canonicalize path: {}", path))
+    }
+    
+    fn get_sanitized_file_path(&self, path: &Path) -> PathBuf {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_else(|| {
+            path.as_os_str()
+                .to_str()
+                .expect("Invalid UTF-8 in file path")
+        });
+        let joined = path.parent().unwrap().join(stem);
+        Path::new(
+            joined
+                .to_str()
+                .unwrap()
+                .strip_prefix(r"\\?\")
+                .unwrap_or(joined.to_str().unwrap()),
+        )
+        .to_path_buf()
+    }
+    
+    fn make_dir_filename(&self, path: &Path) -> String {
+        let re = Regex::new(r"_\[\d+\]$").unwrap();
+        let mut base = re.replace(path.to_str().unwrap(), "").to_string();
+        base.push_str(".dir.splm");
+        base
+    }
+    
+    fn ensure_output_directory(&self, base: &Path, relative: &str) {
+        if let Some(parent) = Path::new(relative).parent() {
+            let full = base.join(parent);
+            if !full.exists() {
+                fs::create_dir_all(&full).expect("Cannot create output directory");
+            }
+        }
+    }
+    
+    fn report_file_written(&self, path: &str, bytes: usize) {
+        println!("File {} is written, total written - {} kB", path, bytes / 1024);
+    }
+    
+    fn report_fragment_read(&self, number: usize, name: &str, bytes: usize) {
+        println!(
+            "File {} is read, total read - {} kB",
+            self.make_output_filename(number, &name.to_string(), false),
+            bytes / 1024
+        );
+    }
     
     fn current_time_millis() -> u128 {
         SystemTime::now()
