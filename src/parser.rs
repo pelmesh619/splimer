@@ -59,7 +59,8 @@ pub struct ProgramInput {
     pub fragment_size: usize,
     pub output_directory: Option<String>,
     pub parts: Option<usize>,
-    pub part_number: Option<usize>
+    pub part_number: Option<usize>,
+    pub is_quiet: bool
 }
 
 struct ProgramInputBuilder {
@@ -68,7 +69,8 @@ struct ProgramInputBuilder {
     pub fragment_size: usize,
     pub output_directory: Option<String>,
     pub parts: Option<usize>,
-    pub part_number: Option<usize>
+    pub part_number: Option<usize>,
+    pub is_quiet: bool
 }
 
 impl ProgramInputBuilder {
@@ -79,7 +81,8 @@ impl ProgramInputBuilder {
             fragment_size: DEFAULT_FRAGMENT_SIZE,
             output_directory: None,
             parts: None,
-            part_number: None
+            part_number: None,
+            is_quiet: false
         }
     }
 }
@@ -152,7 +155,8 @@ impl ProgramInput {
                 fragment_size: builder.fragment_size,
                 output_directory: builder.output_directory.clone(),
                 parts: builder.parts,
-                part_number: builder.part_number
+                part_number: builder.part_number,
+                is_quiet: builder.is_quiet
             }
         );
     }
@@ -213,6 +217,10 @@ impl ProgramInput {
             },
             "-s" | "--split" => {
                 builder.to_split = true;
+                return ParseResult::SuccessfulHandledFlag;
+            },
+            "-q" | "--quiet" => {
+                builder.is_quiet = true;
                 return ParseResult::SuccessfulHandledFlag;
             },
             "-h" | "--help" => {
