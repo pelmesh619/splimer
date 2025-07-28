@@ -49,9 +49,7 @@ impl Splimer {
         let mut offset = 0;
         self.records = Vec::new();
         
-        for (path, size) in files {
-            let fragment_index = offset / self.program_input.fragment_size;
-            
+        for (path, size) in files {            
             let relative_path = path.strip_prefix(&root_path)
                 .unwrap_or(&path)
                 .to_string_lossy()
@@ -61,11 +59,23 @@ impl Splimer {
                 path: relative_path,
                 size,
                 offset,
-                fragment_index,
+                fragment_index: 0,
             });
             
             offset += size;
         }
+        
+        let file_size = {
+            let r = self.records.last().unwrap();
+            r.offset + r.size
+        };
+        if let Some(parts) = self.program_input.parts {
+            self.program_input.fragment_size = (file_size + parts - 1) / parts;
+        }
+        for f in &mut self.records {
+            f.fragment_index = f.offset / self.program_input.fragment_size
+        }
+
 
         let file = File::create(output_file)?;
         serde_json::to_writer_pretty(file, &self.records)?;
@@ -135,10 +145,6 @@ impl Splimer {
             let r = self.records.last().unwrap();
             r.offset + r.size
         };
-
-        if let Some(parts) = self.program_input.parts {
-            self.program_input.fragment_size = (file_size + parts - 1) / parts;
-        }
 
         if file_size < self.program_input.fragment_size {
             println!("{} {} is already less than {} kB, no work is done!", 
