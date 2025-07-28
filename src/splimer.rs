@@ -35,16 +35,11 @@ impl Splimer {
             records: Vec::new()
         };
     }
-    pub fn make_dir_file(&mut self) {
-        let _ = self.scan_directory(
-            &self.make_output_dir_filename(&self.program_input.input_filename)
-        );
-    }
-    
-    fn scan_directory(&mut self, output_file: &str) -> io::Result<()> {
+    fn make_dir_file(&mut self) -> io::Result<()> {
+        let output_file = &self.make_output_dir_filename(&self.program_input.input_filename);
         let root_path = Path::new(&self.program_input.input_filename).canonicalize()?;
         
-        let files = Self::collect_files_recursively(&root_path)?;
+        let files = Self::collect_files(&root_path)?;
         
         let mut offset = 0;
         self.records = Vec::new();
@@ -64,6 +59,9 @@ impl Splimer {
             
             offset += size;
         }
+        if self.records.len() == 0 {
+            return Ok(())
+        }
         
         let file_size = {
             let r = self.records.last().unwrap();
@@ -76,19 +74,18 @@ impl Splimer {
             f.fragment_index = f.offset / self.program_input.fragment_size
         }
 
-
         let file = File::create(output_file)?;
         serde_json::to_writer_pretty(file, &self.records)?;
         
         Ok(())
     }
 
-    fn collect_files_recursively(root: &Path) -> io::Result<Vec<(PathBuf, usize)>> {
+    fn collect_files(root: &Path) -> io::Result<Vec<(PathBuf, usize)>> {
         let mut files = Vec::new();
-        Self::collect_files(root, &mut files)?;
+        Self::_collect_files(root, &mut files)?;
         Ok(files)
     }
-    fn collect_files(current_dir: &Path, files: &mut Vec<(PathBuf, usize)>) -> io::Result<()> {
+    fn _collect_files(current_dir: &Path, files: &mut Vec<(PathBuf, usize)>) -> io::Result<()> {
         for entry in fs::read_dir(current_dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -97,13 +94,11 @@ impl Splimer {
             if metadata.is_file() {
                 files.push((path, metadata.len() as usize));
             } else if metadata.is_dir() {
-                Self::collect_files(&path, files)?;
+                Self::_collect_files(&path, files)?;
             }
         }
         Ok(())
     }
-
-
 
     pub fn split(&mut self) {    
         let full_path = fs::canonicalize(&self.program_input.input_filename).expect("Failed to canonicalize path");
@@ -116,9 +111,10 @@ impl Splimer {
 
         let metadata = Self::check_file_access(fs::metadata(full_path));
         let parent_directory;
+        let dir_filename = &self.make_output_dir_filename(&self.program_input.input_filename);
         if metadata.is_dir() {
             parent_directory = Path::new(full_path);
-            self.make_dir_file();
+            self.make_dir_file().expect(format!("There is some error in creating directory file {}", dir_filename).as_str());
             if self.records.is_empty() {
                 println!("The directory {} is empty to split, no work is done", 
                     self.program_input.input_filename
