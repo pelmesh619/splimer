@@ -300,13 +300,13 @@ impl Splimer {
 
 
         // checking, if XXX.dir.splm is a real thing
-        let dir_metadata = fs::metadata({
+        let dir_filename = {
             let re = Regex::new(r"_\[\d+\]$").unwrap();
             let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
             s.push_str(".dir.splm");
             s
-        }
-        );
+        };
+        let dir_metadata = fs::metadata(&dir_filename);
         
         let mut is_single_file = false;
         if let Err(_) = dir_metadata {
@@ -323,8 +323,7 @@ impl Splimer {
         } else if let Ok(d) = dir_metadata {
             if !d.is_file() {
                 eprintln!(
-                    "Directory file {} is not a file at all, no work is done",
-                    self.make_output_dir_filename(&file_path.to_str().unwrap().to_string())
+                    "Directory file {} is not a file at all, no work is done", &dir_filename
                 );
                 return;
             }
@@ -332,12 +331,7 @@ impl Splimer {
             let dir_file= Self::check_file_access(
                 OpenOptions::new()
                     .read(true)
-                    .open({
-                        let re = Regex::new(r"_\[\d+\]$").unwrap();
-                        let mut s = re.replace(&file_path.to_str().unwrap(), "").to_string();
-                        s.push_str(".dir.splm");
-                        s
-                    })
+                    .open(&dir_filename)
             );
 
             self.read_metadata(&dir_file).expect("TODO");
@@ -546,15 +540,9 @@ impl Splimer {
 
         let filename = filename.to_string() + ".dir.splm";
 
-        if let Some(dir) = &self.program_input.output_directory {
-            Path::new(&dir)
-                .join(filename)
-                .to_str().unwrap().to_string()
-        } else {
-            Path::new(pattern).parent().unwrap()
-                .join(Path::new(&filename))
-                .to_str().unwrap().to_string()
-        }        
+        Path::new(&self.program_input.output_directory.clone().unwrap_or(String::new()))
+            .join(filename)
+            .to_str().unwrap().to_string()
     }
 
     fn make_filename_with_suffix(suffix: &String, pattern: &String) -> String {        
