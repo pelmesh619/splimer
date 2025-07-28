@@ -541,13 +541,6 @@ impl Splimer {
             .to_str().unwrap().to_string()
     }
 
-    fn make_filename_with_suffix(suffix: &String, pattern: &String) -> String {        
-        return Path::new(pattern).file_stem().unwrap().to_str().unwrap().to_string() + 
-            suffix + 
-            "." + 
-            Path::new(pattern).extension().unwrap().to_str().unwrap();
-    }
-
     fn check_file_access<T, Error: std::fmt::Debug>(result: Result<T, Error>) -> T {
         match result {
             Ok(t) => t,
