@@ -7,6 +7,8 @@ use parser::{ParseResult, ProgramInput};
 mod splimer;
 use splimer::Splimer;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -83,6 +85,10 @@ splimer
     --output-directory=(output_directory)   Output directory
                                             (by default it is a directory, where input file lies)
 
+    -q
+    --quiet                                 Quiet mode, removes all console output
+                                            (if program exited right)
+
     -h 
     --help                                  Show help message"
             );
@@ -92,6 +98,12 @@ splimer
     }
 
     let ParseResult::Success(program_input) = program_input else { panic!(); };
+    if !program_input.is_quiet {
+        println!("Splimer {}", VERSION);
+        println!("Application for splitting and merging files");
+        println!("https://github.com/pelmesh619/splimer \n");
+    }   
+
     if let Some(dir) = &program_input.output_directory {
         fs::create_dir_all(Path::new(dir)).unwrap();
     }
