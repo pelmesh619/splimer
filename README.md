@@ -100,5 +100,5 @@ splimer myfile --merge
 
 ## TODO
 
-* Directory content splitting
 * Possibly real archiving (like with compression and/or error-resistance)
+* Extract specific file from an archive
