@@ -69,10 +69,11 @@ splimer
     -o (output_directory)
     --output-directory=(output_directory)   Output directory
                                             (by default it is a directory, where input file lies)
-
+                                            
     -q
     --quiet                                 Quiet mode, removes all console output
                                             (if program exited right)
+
 
     -h 
     --help                                  Show help message
