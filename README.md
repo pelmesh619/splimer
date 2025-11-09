@@ -74,6 +74,11 @@ splimer
     --quiet                                 Quiet mode, removes all console output
                                             (if program exited right)
 
+    --backslash-delimiter           Replaces backslashes to forward slashes in file names to write doing merge
+                                    Use it if 
+                                    * directory was splitted on Windows
+                                    * with splimer version 1.2.0 or lower
+                                    * and you want to merge it on Linux or macOS
 
     -h 
     --help                                  Show help message

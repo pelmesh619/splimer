@@ -4,7 +4,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::io;
 use regex::Regex;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Serialize, Deserialize};
 use serde_json;
@@ -46,9 +46,9 @@ impl Splimer {
         
         for (path, size) in files {            
             let relative_path = path.strip_prefix(&root_path)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .into_owned();
+                .unwrap_or(&path);
+
+            let relative_path = to_unix_path(relative_path);
             
             self.records.push(FileRecord {
                 path: relative_path,
@@ -577,7 +577,48 @@ impl Splimer {
         let reader = BufReader::new(file);
         self.records = serde_json::from_reader(reader).expect("Directory file is corrupted and cannot be read!");
 
+        if self.program_input.backslash_delimiter {
+            for rec in &mut self.records {
+                rec.path = rec.path.replace("\\", "/");
+            }
+        }
+
         Ok(())
     }
 
+}
+
+fn to_unix_path(path: &Path) -> String {
+    let mut components = path.components();
+    let mut unix_path = String::new();
+
+    while let Some(component) = components.next() {
+        match component {
+            Component::Prefix(prefix) => {
+                if let Some(disk) = prefix.as_os_str().to_str().and_then(|s| s.strip_suffix(':')) {
+                    unix_path.push_str(&disk.to_lowercase());
+                    unix_path.push_str("/");
+                }
+            }
+            Component::RootDir => {
+                unix_path.push('/');
+            }
+            Component::CurDir => {
+                unix_path.push_str("./");
+            }
+            Component::ParentDir => {
+                unix_path.push_str("../");
+            }
+            Component::Normal(name) => {
+                if let Some(name_str) = name.to_str() {
+                    unix_path.push_str(name_str);
+                }
+                if components.as_path() != Path::new("") {
+                    unix_path.push('/');
+                }
+            }
+        }
+    }
+
+    unix_path
 }
