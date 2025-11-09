@@ -60,7 +60,8 @@ pub struct ProgramInput {
     pub output_directory: Option<String>,
     pub parts: Option<usize>,
     pub part_number: Option<usize>,
-    pub is_quiet: bool
+    pub is_quiet: bool,
+    pub backslash_delimiter: bool,
 }
 
 struct ProgramInputBuilder {
@@ -70,7 +71,8 @@ struct ProgramInputBuilder {
     pub output_directory: Option<String>,
     pub parts: Option<usize>,
     pub part_number: Option<usize>,
-    pub is_quiet: bool
+    pub is_quiet: bool,
+    pub backslash_delimiter: bool,
 }
 
 impl ProgramInputBuilder {
@@ -82,7 +84,8 @@ impl ProgramInputBuilder {
             output_directory: None,
             parts: None,
             part_number: None,
-            is_quiet: false
+            is_quiet: false,
+            backslash_delimiter: false,
         }
     }
 }
@@ -156,7 +159,8 @@ impl ProgramInput {
                 output_directory: builder.output_directory.clone(),
                 parts: builder.parts,
                 part_number: builder.part_number,
-                is_quiet: builder.is_quiet
+                is_quiet: builder.is_quiet,
+                backslash_delimiter: builder.backslash_delimiter
             }
         );
     }
@@ -221,6 +225,10 @@ impl ProgramInput {
             },
             "-q" | "--quiet" => {
                 builder.is_quiet = true;
+                return ParseResult::SuccessfulHandledFlag;
+            },
+            "--backslash-delimiter" => {
+                builder.backslash_delimiter = true;
                 return ParseResult::SuccessfulHandledFlag;
             },
             "-h" | "--help" => {
