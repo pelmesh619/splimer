@@ -577,6 +577,12 @@ impl Splimer {
         let reader = BufReader::new(file);
         self.records = serde_json::from_reader(reader).expect("Directory file is corrupted and cannot be read!");
 
+        if self.program_input.backslash_delimiter {
+            for rec in &mut self.records {
+                rec.path = rec.path.replace("\\", "/");
+            }
+        }
+
         Ok(())
     }
 
